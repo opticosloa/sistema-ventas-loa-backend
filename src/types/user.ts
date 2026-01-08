@@ -1,0 +1,12 @@
+export interface User {
+    id: string;
+    nombre: string;
+    apellido: string;
+    email: string;
+    password_hash: string;
+    rol: string;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
+    sucursal_id: string;
+}

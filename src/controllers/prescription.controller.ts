@@ -1,0 +1,266 @@
+import { Request, Response } from "express";
+import { PostgresDB } from "../database/postgres";
+import fs from "fs";
+import sharp from "sharp";
+import { Prescription } from "../types/prescription";
+import { PrescriptionValidator } from "../helpers/prescriptionValidator";
+import { cloudinaryUploader } from "../helpers/cloudinaryUploader";
+
+export class PrescriptionController {
+
+  private static instance: PrescriptionController;
+
+  private constructor() { }
+
+  public static getInstance(): PrescriptionController {
+    if (!PrescriptionController.instance) {
+      PrescriptionController.instance = new PrescriptionController();
+    }
+    return PrescriptionController.instance;
+  }
+
+  public async uploadPrescription(req: Request, res: Response) {
+    if (!req.file?.buffer) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const tempPath = `temp_${Date.now()}.jpg`;
+
+    try {
+      await sharp(req.file.buffer)
+        .rotate()
+        .resize({ width: 1600, withoutEnlargement: true })
+        .grayscale()
+        .jpeg({ quality: 80, mozjpeg: true })
+        .toFile(tempPath);
+
+      const uploadResult = await cloudinaryUploader({ path: tempPath });
+
+      return res.json({
+        success: true,
+        imageUrl: uploadResult.url,
+      });
+
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ success: false });
+    } finally {
+      if (fs.existsSync(tempPath)) {
+        await fs.promises.unlink(tempPath);
+      }
+    }
+  }
+
+
+  public async createPrescription(req: Request, res: Response) {
+
+    const {
+      cliente_id,
+      cliente,
+      doctor_id,
+      matricula,
+      fecha,
+      lejos,
+      cerca,
+      multifocal,
+      observaciones,
+      image_url,
+      obraSocial
+    } = req.body;
+
+    try {
+      let finalClienteId = cliente_id;
+
+      console.log(req.body);
+      // 1. Resolver cliente
+      if (!finalClienteId) {
+        if (!cliente || !cliente.dni) {
+          return res.status(400).json({
+            success: false,
+            error: 'Debe enviar cliente_id o datos completos del cliente'
+          });
+        }
+
+        // Buscar cliente por DNI
+        const existingClient = await PostgresDB
+          .getInstance()
+          .callStoredProcedure('sp_cliente_get_by_dni', [cliente.dni]);
+
+        if (existingClient.rows.length > 0) {
+          finalClienteId = existingClient.rows[0].cliente_id;
+        } else {
+          const capitalize = (str: string) =>
+            (str || '')
+              .toLowerCase()
+              .replace(/(^|[\s-])(\S)/g, (_, sep, char) => sep + char.toUpperCase());
+
+          const clienteResult = await PostgresDB
+            .getInstance()
+            .callStoredProcedure('sp_cliente_crear', [
+              capitalize(cliente.nombre),
+              capitalize(cliente.apellido),
+              cliente.telefono ?? null,
+              cliente.email ?? null,
+              cliente.dni,
+              cliente.direccion ? capitalize(cliente.direccion) : null,
+              cliente.fecha_nacimiento ?? null,
+              0
+            ]);
+
+          finalClienteId = clienteResult.rows[0].cliente_id;
+        }
+      }
+
+      // 2. Resolver Doctor (si viene matricula y no doctor_id)
+      let finalDoctorId = doctor_id;
+      if (!finalDoctorId && matricula) {
+        const doctorResult = await PostgresDB.getInstance().callStoredProcedure('sp_doctor_get_by_matricula', [matricula]);
+        if (doctorResult.rows.length > 0) {
+          finalDoctorId = doctorResult.rows[0].doctor_id;
+        } else if (doctorResult.rows.length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: 'Doctor no encontrado con esa matricula'
+          });
+        }
+      }
+
+      if (!finalDoctorId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Doctor no encontrado'
+        });
+      }
+
+      // 3. Crear prescripción
+      const prescripcionResult = await PostgresDB
+        .getInstance()
+        .callStoredProcedure('sp_prescripcion_crear', [
+          finalClienteId,
+          finalDoctorId,
+          fecha,
+          lejos,
+          cerca,
+          multifocal,
+          observaciones,
+          image_url,
+          obraSocial || null
+        ]);
+
+      const prescripcion_id = prescripcionResult.rows[0].prescripcion_id;
+
+      // 4. Crear Venta Automáticamente
+      // Necesitamos vendedor_id y sucursal_id del token (req.user)
+      const vendedor_id = req.user?.id;
+      const sucursal_id = req.user?.sucursal_id;
+
+      if (!vendedor_id || !sucursal_id) {
+        // Si por alguna razón falla el contexto, devolvemos success pero sin venta (o error, segun logica de negocio - aqui error para forzar auth)
+        console.error("Missing user context for auto-sale creation");
+        // Opcional: rollback prescription? Por ahora retornamos lo que hay.
+      } else {
+        const ventaResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_crear', [
+          vendedor_id,
+          finalClienteId,
+          sucursal_id,
+          false // urgente default false
+        ]);
+
+        const venta_id = ventaResult[0]?.sp_venta_crear || ventaResult[0]?.venta_id;
+
+        // Opcional: Asociar la venta con la prescripción si existiera una tabla intermedia, 
+        // pero por ahora solo devolvemos el ID.
+
+        return res.json({
+          success: true,
+          prescripcion_id,
+          venta_id
+        });
+      }
+
+      res.json({
+        success: true,
+        prescripcion_id
+      });
+
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+  public async getPrescription(req: Request, res: Response) {
+    try {
+      const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_get', []);
+      res.json({ success: true, result: result.rows });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+
+
+  public async getPrescriptionById(req: Request, res: Response) {
+    const { id } = req.params;
+    try {
+      const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_get_by_id', [id]);
+      res.json({ success: true, result: result.rows[0] });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+  public async getPrescriptionsByClientId(req: Request, res: Response) {
+    const { cliente_id } = req.params;
+    try {
+      const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_get_by_cliente', [cliente_id]);
+      res.json({ success: true, result: result.rows });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+  public async getPrescriptionsByClientDni(req: Request, res: Response) {
+    const { cliente_id } = req.params;
+    try {
+      const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_get_by_cliente_dni', [cliente_id]);
+      res.json({ success: true, result: result.rows });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+  public async associateProduct(req: Request, res: Response) {
+    const { id } = req.params; // prescription_id
+    const { producto_id } = req.body;
+    try {
+      const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_asociar_producto', [id, producto_id]);
+      res.json({ success: true, result: result.rows[0] });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+  public async getPrescriptionProducts(req: Request, res: Response) {
+    const { id } = req.params; // prescription_id
+    try {
+      const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_get_productos', [id]);
+      res.json({ success: true, result: result.rows });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+  public pruebaGet(req: Request, res: Response) {
+    res.json({
+      ok: true,
+      message: "crearProducto",
+    });
+  };
+}

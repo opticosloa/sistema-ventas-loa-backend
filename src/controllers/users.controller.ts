@@ -1,0 +1,229 @@
+import { PostgresDB } from "../database/postgres";
+import type { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { User } from "../types/user";
+import { envs } from "../helpers/envs";
+
+export class UsersController {
+    private static instance: UsersController;
+
+    private constructor() { }
+
+    public static getInstance(): UsersController {
+        if (!UsersController.instance) {
+            UsersController.instance = new UsersController();
+        }
+        return UsersController.instance;
+    }
+
+    public async createUser(req: Request, res: Response) {
+        const { nombre, apellido, email, password_hash, rol, is_active, sucursal_id }: User = req.body;
+
+        try {
+            let emailUpper = email.toUpperCase();
+            let rolUpper = rol.toUpperCase();
+            const password = bcrypt.hashSync(password_hash, envs.BCRYPT_SALT_ROUNDS);
+
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_crear', [
+                nombre,
+                apellido,
+                emailUpper,
+                password,
+                rolUpper,
+                is_active,
+                sucursal_id
+            ]);
+
+            const user = result.rows[0];
+            const token = jwt.sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre, apellido: user.apellido, sucursal_id: user.sucursal_id }, envs.JWT_SECRET, { expiresIn: '16h' });
+
+            res.json({ success: true, result, token });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async getUsers(req: Request, res: Response) {
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get');
+            res.json({ success: true, result });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async getUserById(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_id', [id]);
+            res.json({ success: true, result });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async updateUser(req: Request, res: Response) {
+        const { id } = req.params;
+        const { nombre, apellido, email, password_hash, rol, is_active }: User = req.body;
+        try {
+            let emailUpper = email.toUpperCase();
+            let rolUpper = rol.toUpperCase();
+            const password = bcrypt.hashSync(password_hash, envs.BCRYPT_SALT_ROUNDS);
+
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_editar', [
+                id,
+                nombre,
+                apellido,
+                emailUpper,
+                password,
+                rolUpper,
+                is_active
+            ]);
+            res.json({ success: true, result });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async deleteUser(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_eliminar', [id]);
+            res.json({ success: true, result });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async loginUser(req: Request, res: Response) {
+
+        const { email, password } = req.body;
+
+        try {
+            let emailUpper = email.toUpperCase();
+            const user = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_email', [emailUpper]);
+
+            if (!user.rows || user.rows.length === 0) {
+                return res.status(400).json({ success: false, error: 'Usuario o contraseña incorrectos' });
+            }
+
+            const userData = user.rows[0];
+            console.log(userData)
+            const isPasswordValid = bcrypt.compareSync(password, userData.password_hash);
+            if (!isPasswordValid) {
+                return res.status(400).json({ success: false, error: 'Usuario o contraseña incorrectos' });
+            }
+
+            if (!userData.is_active) {
+                return res.status(400).json({ success: false, error: 'Usuario inactivo' });
+            }
+
+            const { password_hash, ...userWithoutPassword } = userData;
+
+            const token = jwt.sign({
+                id: userData.usuario_id,
+                email: userData.email,
+                rol: userData.rol,
+                nombre: userData.nombre,
+                apellido: userData.apellido,
+                sucursal_id: userData.sucursal_id
+            },
+                envs.JWT_SECRET, { expiresIn: '16h' });
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: envs.NODE_ENV === 'production', // true in production
+                sameSite: 'lax', // Protects against CSRF
+                maxAge: 16 * 60 * 60 * 1000 // 16 hours
+            });
+
+            res.json({ success: true, user: userWithoutPassword, token });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async logoutUser(req: Request, res: Response) {
+        try {
+            res.clearCookie('token', {
+                httpOnly: true,
+                secure: envs.NODE_ENV === 'production',
+                sameSite: 'lax'
+            });
+            res.json({ success: true });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async changePassword(req: Request, res: Response) {
+        const { email, password } = req.body;
+
+        try {
+            let emailUpper = email.toUpperCase();
+            const password_hash = bcrypt.hashSync(password, envs.BCRYPT_SALT_ROUNDS);
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_actualizar_password', [emailUpper, password_hash]);
+
+            res.status(200).json({ success: true, result: result.rows });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async handlerRol(req: Request, res: Response) {
+        const { email, rol } = req.body;
+
+        try {
+
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_editar_rol', [email, rol])
+
+            res.status(200).json({ success: true, result: result.rows });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async validateToken(req: Request, res: Response) {
+        try {
+            const token =
+                req.cookies?.token ||
+                req.headers.authorization?.split(' ')[1];
+
+            if (!token) {
+                return res.status(401).json({ success: false });
+            }
+
+            const decoded = jwt.verify(token, envs.JWT_SECRET);
+
+            res.json({
+                success: true,
+                user: {
+                    id: (decoded as any).id,
+                    email: (decoded as any).email,
+                    rol: (decoded as any).rol,
+                    nombre: (decoded as any).nombre,
+                    apellido: (decoded as any).apellido,
+                    sucursal_id: (decoded as any).sucursal_id
+                }
+            });
+        } catch (error) {
+            res.clearCookie('token', {
+                httpOnly: true,
+                secure: envs.NODE_ENV === 'production',
+                sameSite: 'lax'
+            });
+            return res.status(401).json({ success: false });
+        }
+    }
+
+}
