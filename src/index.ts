@@ -12,13 +12,15 @@ import { envs } from './helpers/envs';
 const app = express();
 app.use(cors({
   origin: [
+    'https://sistema-ventas-loa-backend-production.up.railway.app',
+    'http://localhost:5173',
     envs.FRONT_URL,
-    'http://localhost:5173'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning']
 }));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -52,4 +54,14 @@ app.use(AppRoutes.routes);
 const port = envs.PORT || 10000;
 app.listen(port, () => {
   console.log('Server running on port:', port);
+});
+
+// Una ruta simple de bienvenida y estado
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    message: 'CRM LOA API is running',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
 });
