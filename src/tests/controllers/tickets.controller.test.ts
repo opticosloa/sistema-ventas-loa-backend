@@ -31,7 +31,7 @@ describe('TicketsController', () => {
     });
 
     it('should create ticket', async () => {
-        req.body = { venta_id: 1, cliente_id: 2, empleado_id: 3, fecha_entrega_estimada: '2023-01-01', estado: 'PENDING', notas: 'Note' };
+        req.body = { venta_id: 1, cliente_id: 2, usuario_id: 3, fecha_entrega_estimada: '2023-01-01', estado: 'PENDING', notas: 'Note' };
         const mockResult = { rows: [] };
         (PostgresDB.getInstance().callStoredProcedure as jest.Mock).mockResolvedValue(mockResult);
 

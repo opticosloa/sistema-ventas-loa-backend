@@ -49,7 +49,7 @@ app.use(express.static('public'));
 // Rutas
 app.use(AppRoutes.routes);
 
-const port = envs.PORT || 4000;
+const port = envs.PORT || 10000;
 app.listen(port, () => {
   console.log('Server running on port:', port);
 });

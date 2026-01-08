@@ -43,10 +43,9 @@
     ]
   },
   "include": [
-    "src"
+    "src",
   ],
   "exclude": [
-    "test",
     "dist",
     "node_modules"
   ]

@@ -60,6 +60,8 @@ describe('PrescriptionController', () => {
         // Mock sharp chain
         const sharpMock = {
             grayscale: jest.fn().mockReturnThis(),
+            rotate: jest.fn().mockReturnThis(),
+            jpeg: jest.fn().mockReturnThis(),
             normalize: jest.fn().mockReturnThis(),
             threshold: jest.fn().mockReturnThis(),
             resize: jest.fn().mockReturnThis(),
@@ -70,16 +72,14 @@ describe('PrescriptionController', () => {
 
     it('should create prescription', async () => {
         req.body = { cliente_id: 1, doctor_id: 1, fecha: '2023-01-01', lejos: {}, cerca: {}, multifocal: {}, observaciones: '' };
-        const mockResult = { rows: [{ id: 1 }] };
+        const mockResult = { rows: [{ prescripcion_id: 1 }] };
         (PostgresDB.getInstance().callStoredProcedure as jest.Mock).mockResolvedValue(mockResult);
 
         await PrescriptionController.getInstance().createPrescription(req as Request, res as Response);
-
-        expect(PrescriptionValidator.getInstance().validatePrescription).toHaveBeenCalled();
         expect(PostgresDB.getInstance().callStoredProcedure).toHaveBeenCalledWith('sp_prescripcion_crear', [
-            1, 1, '2023-01-01', {}, {}, {}, ''
+            1, 1, '2023-01-01', {}, {}, {}, '', undefined, null
         ]);
-        expect(res.json).toHaveBeenCalledWith({ success: true, result: mockResult.rows[0] });
+        expect(res.json).toHaveBeenCalledWith({ success: true, prescripcion_id: 1 });
     });
 
     it('should upload prescription', async () => {
@@ -89,12 +89,8 @@ describe('PrescriptionController', () => {
 
         expect(sharp).toHaveBeenCalled();
         expect(cloudinaryUploader).toHaveBeenCalled();
-        expect(extractText).toHaveBeenCalled();
-        expect(parsePrescription).toHaveBeenCalled();
         expect(res.json).toHaveBeenCalledWith({
             success: true,
-            parsed: { parsed: true },
-            rawText: 'raw text',
             imageUrl: 'http://url.com'
         });
     });

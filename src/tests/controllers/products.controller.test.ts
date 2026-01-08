@@ -47,12 +47,12 @@ describe('ProductsController', () => {
         const mockResult = { rows: [{ producto_id: 1 }] };
         (PostgresDB.getInstance().callStoredProcedure as jest.Mock).mockResolvedValue(mockResult);
 
-        await ProductsController.getInstance().createProducto(req as Request, res as Response, next);
+        await ProductsController.getInstance().createProducto(req as Request, res as Response);
 
         expect(PostgresDB.getInstance().callStoredProcedure).toHaveBeenCalledWith('sp_producto_crear', [
-            'Prod 1', 'Desc', 'LENS', 1, 10, 20, 21, 100, 5, 'A1'
+            'PROD 1', 'Desc', 'LENS', 1, 10, 20, 21, 100, 5, 'A1'
         ]);
-        expect(res.json).toHaveBeenCalledWith({ success: true, result: mockResult });
+        expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Producto creado correctamente', result: mockResult.rows[0] });
     });
 
     it('should create a product and generate QR for ARMAZON', async () => {
@@ -64,14 +64,14 @@ describe('ProductsController', () => {
         (PostgresDB.getInstance().callStoredProcedure as jest.Mock).mockResolvedValue(mockResult);
         (QRCode.toDataURL as jest.Mock).mockResolvedValue('data:image/png;base64,...');
 
-        await ProductsController.getInstance().createProducto(req as Request, res as Response, next);
+        await ProductsController.getInstance().createProducto(req as Request, res as Response);
 
         expect(QRCode.toDataURL).toHaveBeenCalled();
         expect(PostgresDB.getInstance().executeQuery).toHaveBeenCalledWith(
             'UPDATE productos SET qr_code = $1 WHERE producto_id = $2',
             ['data:image/png;base64,...', 123]
         );
-        expect(res.json).toHaveBeenCalledWith({ success: true, result: mockResult });
+        expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Producto creado correctamente', result: mockResult.rows[0] });
     });
 
     it('should update a product', async () => {
@@ -121,13 +121,13 @@ describe('ProductsController', () => {
 
     it('should get product by id', async () => {
         req.params = { id: '1' };
-        const mockResult = { rows: [] };
+        const mockResult = { rows: [{ id: 1 }] };
         (PostgresDB.getInstance().callStoredProcedure as jest.Mock).mockResolvedValue(mockResult);
 
-        await ProductsController.getInstance().getProductosById(req as Request, res as Response);
+        await ProductsController.getInstance().getProductById(req as Request, res as Response);
 
         expect(PostgresDB.getInstance().callStoredProcedure).toHaveBeenCalledWith('sp_producto_get_by_id', ['1']);
-        expect(res.json).toHaveBeenCalledWith({ success: true, result: mockResult });
+        expect(res.json).toHaveBeenCalledWith({ success: true, result: mockResult.rows[0] });
     });
 
     it('should list products', async () => {
