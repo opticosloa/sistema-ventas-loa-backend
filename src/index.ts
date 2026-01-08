@@ -10,11 +10,14 @@ import { envs } from './helpers/envs';
 
 
 const app = express();
+
+app.set('trust proxy', 1);
+
 app.use(cors({
   origin: [
     'https://sistema-ventas-loa-backend-production.up.railway.app',
     'http://localhost:5173',
-    envs.FRONT_URL,
+    envs.FRONT_URL.replace(/\/$/, ""),
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -29,7 +32,7 @@ if (!envs.GOOGLE_APPLICATION_CREDENTIALS) {
   throw new Error('GOOGLE_APPLICATION_CREDENTIALS environment variable is not set');
 }
 const visionClient = new vision.ImageAnnotatorClient({
-  keyFilename: envs.GOOGLE_APPLICATION_CREDENTIALS as string,
+  credentials: JSON.parse(envs.GOOGLE_APPLICATION_CREDENTIALS as string),
 });
 
 // Configurar multer para usar memoria (buffer)

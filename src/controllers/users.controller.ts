@@ -138,8 +138,8 @@ export class UsersController {
 
             res.cookie('token', token, {
                 httpOnly: true,
-                secure: envs.NODE_ENV === 'production', // true in production
-                sameSite: 'lax', // Protects against CSRF
+                secure: true, // true in production
+                sameSite: 'none', // Protects against CSRF
                 maxAge: 16 * 60 * 60 * 1000 // 16 hours
             });
 
@@ -219,8 +219,9 @@ export class UsersController {
         } catch (error) {
             res.clearCookie('token', {
                 httpOnly: true,
-                secure: envs.NODE_ENV === 'production',
-                sameSite: 'lax'
+                secure: true, // true in production
+                sameSite: 'none', // Protects against CSRF
+                maxAge: 16 * 60 * 60 * 1000 // 16 hours
             });
             return res.status(401).json({ success: false });
         }
