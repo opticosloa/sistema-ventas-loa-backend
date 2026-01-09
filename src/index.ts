@@ -17,11 +17,11 @@ app.use(cors({
   origin: [
     'https://sistema-ventas-loa-backend-production.up.railway.app',
     'http://localhost:5173',
-    envs.FRONT_URL.replace(/\/$/, ""),
+    envs.FRONT_URL.replace(/\/$/, "") || 'https://sistema-ventas-loa.vercel.app',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
 
 app.use(express.json());
