@@ -29,6 +29,7 @@ router.post('/upload', (req, res, next) => {
 router.get('/', authMiddleware, controller.getPrescription.bind(controller));
 router.post('/', authMiddleware, controller.createPrescription.bind(controller));
 router.get('/client/:cliente_id', authMiddleware, controller.getPrescriptionsByClientId.bind(controller));
+router.get('/last/:cliente_id', authMiddleware, controller.getLastPrescriptionByClient.bind(controller));
 router.get('/client/dni/:dni', authMiddleware, controller.getPrescriptionsByClientDni.bind(controller));
 router.get('/:id', authMiddleware, controller.getPrescriptionById.bind(controller));
 

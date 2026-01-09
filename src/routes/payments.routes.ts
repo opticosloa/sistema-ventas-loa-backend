@@ -16,6 +16,9 @@ router.post('/mercadopago/webhook', controller.handleWebhook.bind(controller));
 // POST /api/payments/mercadopago/qr
 router.post('/mercadopago/qr', controller.createInStoreQr.bind(controller));
 
+// POST /api/payments/mercadopago/point
+router.post('/mercadopago/point', controller.createPointPayment.bind(controller));
+
 // POST /api/payments/manual
 router.post('/manual', controller.createManualPayment.bind(controller));
 

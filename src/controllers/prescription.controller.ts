@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { Prescription } from "../types/prescription";
 import { PrescriptionValidator } from "../helpers/prescriptionValidator";
 import { cloudinaryUploader } from "../helpers/cloudinaryUploader";
+import { CrystalsController } from "./crystals.controller";
 
 export class PrescriptionController {
 
@@ -149,6 +150,34 @@ export class PrescriptionController {
 
       const prescripcion_id = prescripcionResult.rows[0].prescripcion_id;
 
+      // 3b. Descontar Stock de Cristales (Async, no bloqueante o await?)
+      // User requested "Al confirmar venta", pero aqui estamos creando la venta/prescripcion.
+      // Asumimos que se descuenta al crear.
+      const crystalCtrl = CrystalsController.getInstance();
+
+      const deductEye = async (section: any, ojoKey: 'OD' | 'OI') => {
+        if (section && section[ojoKey] && section[ojoKey].esfera && section[ojoKey].cilindro) {
+          const esf = section[ojoKey].esfera;
+          const cil = section[ojoKey].cilindro;
+          const mat = section.tipo || ''; // Mapped from 'Tipo'
+          const trat = section.color || 'Blanco'; // Mapped from 'Color' or default
+
+          // Try deduct
+          await crystalCtrl.deductStock(esf, cil, mat, trat, 1);
+        }
+      };
+
+      // Lejos
+      if (lejos) {
+        await deductEye(lejos, 'OD');
+        await deductEye(lejos, 'OI');
+      }
+      // Cerca
+      if (cerca) {
+        await deductEye(cerca, 'OD');
+        await deductEye(cerca, 'OI');
+      }
+
       // 4. Crear Venta Automáticamente
       // Necesitamos vendedor_id y sucursal_id del token (req.user)
       const vendedor_id = req.user?.id;
@@ -228,6 +257,23 @@ export class PrescriptionController {
     try {
       const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_get_by_cliente_dni', [cliente_id]);
       res.json({ success: true, result: result.rows });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, error });
+    }
+  }
+
+  public async getLastPrescriptionByClient(req: Request, res: Response) {
+    const { cliente_id } = req.params;
+    try {
+      // Use sp_prescripcion_get_ultima as requested
+      const result = await PostgresDB.getInstance().callStoredProcedure('sp_prescripcion_get_ultima', [cliente_id]);
+
+      if (result.rows && result.rows.length > 0) {
+        res.json({ success: true, result: result.rows[0] });
+      } else {
+        res.json({ success: true, result: null });
+      }
     } catch (error) {
       console.log(error);
       res.status(500).json({ success: false, error });

@@ -229,6 +229,50 @@ export class PaymentService {
         return { qr_data, pago_id };
     }
 
+    public async createPointPayment(venta_id: string, monto: number, device_id: string) {
+        if (!device_id) throw new Error("Device ID is required for Point Payment");
+
+        const method = PaymentMethod.MP;
+        // 1. Create local payment reference
+        // Note: For Point, we might need to handle status updates via webhook.
+        const pago_id = await this._createPaymentInDB(venta_id, method, monto);
+
+        // 2. Create Payment Intent
+        const url = `https://api.mercadopago.com/point/integration-api/devices/${device_id}/payment-intents`;
+        const payload = {
+            // La API de Point requiere el monto en CENTAVOS (entero)
+            amount: Math.round(Number(monto) * 100),
+            description: `Venta #${venta_id}`,
+            additional_info: {
+                external_reference: pago_id,
+                print_on_terminal: true
+            }
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const txt = await response.text();
+            throw new Error(`Error creating Payment Intent: ${txt}`);
+        }
+
+        const data = await response.json();
+        /* 
+           Response usually contains:
+           { "id": "...", "status": "OPEN", "amount": 1500, ... }
+        */
+
+        // Optionally, we could store the intent_id if needed, but external_reference links it back.
+        return { success: true, intent_id: data.id, pago_id, status: data.status };
+    }
+
     public async handleMPWebhook(mp_preference_id: string | undefined, type: any, id: any, data: any) {
         // En V2 el tipo suele venir como "payment" o "topic=payment" (IPN)
         // Also handling 'merchant_order' for In-Store QR

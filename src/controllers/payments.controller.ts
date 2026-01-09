@@ -49,6 +49,20 @@ export class PaymentsController {
         }
     }
 
+    public async createPointPayment(req: Request, res: Response) {
+        const { venta_id, monto, device_id } = req.body;
+        // Prioritize body device_id, fallback to envs
+        const targetDeviceId = device_id || process.env.MP_POINT_DEVICE_ID;
+
+        try {
+            const result = await PaymentService.getInstance().createPointPayment(venta_id, monto, targetDeviceId);
+            res.json(result);
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error: (error as Error).message });
+        }
+    }
+
     public async handleWebhook(req: Request, res: Response) {
         // Log para depuración en ngrok
         console.log("Webhook recibido:", JSON.stringify(req.body, null, 2));

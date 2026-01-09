@@ -111,7 +111,7 @@ export class ProductsController {
 
     public async getAllProductos(req: Request, res: Response) {
         try {
-            const result = await PostgresDB.getInstance().callStoredProcedure('sp_producto_get');
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_producto_get_all');
             res.json({ success: true, result });
         } catch (error) {
             console.log(error);

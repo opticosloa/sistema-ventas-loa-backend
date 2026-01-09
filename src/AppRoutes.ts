@@ -1,5 +1,4 @@
 import { Router } from 'express';
-
 import productsRoutes from './routes/products.routes';
 import prescriptionRoutes from './routes/prescription.routes';
 import ticketRoutes from './routes/ticket.routes';
@@ -12,9 +11,8 @@ import doctorsRoutes from './routes/doctors.routes';
 import usersRoutes from './routes/users.routes';
 import tenantsRoutes from './routes/tenants.routes';
 import paymentsRoutes from './routes/payments.routes';
-
-
-
+import salesItemsRoutes from './routes/sales_items.routes';
+import crystalsRoutes from './routes/crystals.routes';
 
 export class AppRoutes {
     static get routes(): Router {
@@ -25,7 +23,7 @@ export class AppRoutes {
         router.use('/api/tickets', ticketRoutes);
         router.use('/api/brands', brandRoutes);
         router.use('/api/sales', salesRoutes);
-        router.use('/api/sales-items', salesRoutes);
+        router.use('/api/sales-items', salesItemsRoutes);
         router.use('/api/clients', clientsRoutes);
         router.use('/api/services', servicesRoutes);
         router.use('/api/users', usersRoutes);
@@ -33,6 +31,7 @@ export class AppRoutes {
         router.use('/api/tenants', tenantsRoutes);
         router.use('/api/alerts', alertsRoutes);
         router.use('/api/payments', paymentsRoutes);
+        router.use('/api/crystals', crystalsRoutes);
 
         return router;
     }

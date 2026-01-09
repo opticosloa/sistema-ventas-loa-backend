@@ -219,4 +219,39 @@ export class SalesController {
     }
 
 
+    // sale.controller.ts
+
+    public async createReturn(req: Request, res: Response) {
+        // 1. Recibimos los datos correctos del frontend (DevolucionesPage ya tiene selectedItems)
+        // Nota: Agregamos 'motivo' y 'total_reembolsado' que faltaban en el envío
+        const { venta_id, items, motivo, total_reembolsado } = req.body;
+
+        try {
+            // 2. Llamamos al SP respetando SU orden de parámetros:
+            // p_venta_id, p_total, p_motivo, p_items
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_devolucion_crear', [
+                venta_id,
+                total_reembolsado || 0,        // Numeric
+                motivo || 'Devolución cliente', // Text
+                JSON.stringify(items)          // JSONB
+            ]);
+
+            res.json({ success: true, result: result.rows[0] });
+        } catch (error) {
+            console.error("Error en createReturn:", error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async markAsBudget(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+
+            await PostgresDB.getInstance().callStoredProcedure('sp_venta_cambiar_estado', [id, 'PRESUPUESTO']);
+            res.json({ success: true });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
 }
