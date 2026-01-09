@@ -14,15 +14,32 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(cors({
-  origin: [
-    'https://sistema-ventas-loa-backend-production.up.railway.app',
-    'http://localhost:5173',
-    envs.FRONT_URL.replace(/\/$/, "") || 'https://sistema-ventas-loa.vercel.app',
-  ],
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://sistema-ventas-loa.vercel.app',
+      'https://sistema-ventas-8u59txz1r-loas-projects-af7a680f.vercel.app',
+    ];
+
+    // permitir requests sin origin (Postman, cron, webhooks)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
+
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 app.use(express.json());
 app.use(cookieParser());
