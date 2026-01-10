@@ -8,6 +8,7 @@ jest.mock('../../database/postgres', () => {
         PostgresDB: {
             getInstance: jest.fn().mockReturnValue({
                 callStoredProcedure: jest.fn(),
+                executeQuery: jest.fn(),
             }),
         },
     };
@@ -64,5 +65,21 @@ describe('SalesController', () => {
             '50', 5, 2, 100
         ]);
         expect(res.json).toHaveBeenCalledWith({ success: true, result: mockResult });
+    });
+    it('should create a sale with discount', async () => {
+        req.body = { cliente_id: 10, urgente: false, descuento: 500 };
+        const mockResult = [{ sp_venta_crear: 55 }];
+        (PostgresDB.getInstance().callStoredProcedure as jest.Mock).mockResolvedValue(mockResult);
+
+        await SalesController.getInstance().createSale(req as Request, res as Response);
+
+        expect(PostgresDB.getInstance().callStoredProcedure).toHaveBeenCalledWith('sp_venta_crear', [
+            1, 10, 2, false
+        ]);
+        expect(PostgresDB.getInstance().executeQuery).toHaveBeenCalledWith(
+            expect.stringContaining('UPDATE ventas SET descuento'),
+            [500, 55]
+        );
+        expect(res.json).toHaveBeenCalledWith({ success: true, venta_id: 55 });
     });
 });

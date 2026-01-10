@@ -16,6 +16,10 @@ router.delete('/:id', controller.deleteUser.bind(controller));
 router.post('/change-password', controller.changePassword.bind(controller));
 router.post('/rol', controller.handlerRol.bind(controller));
 
+// Supervisor Auth
+router.get('/admins', controller.getAdmins.bind(controller));
+router.post('/verify-supervisor', controller.verifySupervisor.bind(controller));
+
 
 
 export default router;

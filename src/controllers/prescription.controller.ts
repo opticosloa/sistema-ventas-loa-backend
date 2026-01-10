@@ -66,7 +66,8 @@ export class PrescriptionController {
       multifocal,
       observaciones,
       image_url,
-      obraSocial
+      obraSocial,
+      descuento // Extract discount
     } = req.body;
 
     try {
@@ -199,6 +200,14 @@ export class PrescriptionController {
 
         // Opcional: Asociar la venta con la prescripción si existiera una tabla intermedia, 
         // pero por ahora solo devolvemos el ID.
+
+        // Update discount if present
+        if (descuento && Number(descuento) > 0) {
+          await PostgresDB.getInstance().executeQuery(
+            'UPDATE ventas SET descuento = $1 WHERE venta_id = $2',
+            [descuento, venta_id]
+          );
+        }
 
         return res.json({
           success: true,

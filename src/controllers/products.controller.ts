@@ -37,24 +37,20 @@ export class ProductsController {
 
             const productId = rows[0].producto_id || Object.values(rows[0])[0];
 
-            // 3. Lógica de QR (Solo para ARMAZON)
-            if (tipo === 'ARMAZON' && productId) {
-                try {
-                    // Generamos el QR con el ID (puedes añadir una URL si prefieres)
-                    const qrCodeImage = await QRCode.toDataURL(productId.toString());
-
-                    // Actualizamos el registro con el QR generado
-                    await PostgresDB.getInstance().executeQuery(
-                        'UPDATE productos SET qr_code = $1 WHERE producto_id = $2',
-                        [qrCodeImage, productId]
-                    );
-
-                    // Actualizamos el objeto en memoria para la respuesta
-                    rows[0].qr_code = qrCodeImage;
-                } catch (qrError) {
-                    console.error('Error generando QR:', qrError);
-                    // No bloqueamos la respuesta principal si falla el QR
-                }
+            // 3. Lógica de QR 
+            try {
+                // Generamos el QR con el ID (puedes añadir una URL si prefieres)
+                const qrCodeImage = await QRCode.toDataURL(productId.toString());
+                // Actualizamos el registro con el QR generado
+                await PostgresDB.getInstance().executeQuery(
+                    'UPDATE productos SET qr_code = $1 WHERE producto_id = $2',
+                    [qrCodeImage, productId]
+                );
+                // Actualizamos el objeto en memoria para la respuesta
+                rows[0].qr_code = qrCodeImage;
+            } catch (qrError) {
+                console.error('Error generando QR:', qrError);
+                // No bloqueamos la respuesta principal si falla el QR
             }
 
             res.status(201).json({

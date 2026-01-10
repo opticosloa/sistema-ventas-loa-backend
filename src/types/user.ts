@@ -9,4 +9,5 @@ export interface User {
     created_at?: string;
     updated_at?: string;
     sucursal_id: string;
+    security_pin?: string;
 }

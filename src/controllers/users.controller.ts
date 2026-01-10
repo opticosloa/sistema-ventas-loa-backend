@@ -227,4 +227,70 @@ export class UsersController {
         }
     }
 
+
+    public async getAdmins(req: Request, res: Response) {
+        try {
+            // Retrieve users with ADMIN or SUPERADMIN role
+            // Since we don't have a specific SP for this, we can filter in code or use a generic query if possible.
+            // Assuming sp_usuario_get returns all users or we use a direct query for simplicity if needed, 
+            // but let's try to reuse sp_usuario_get and filter, or use a new simple query.
+            // "SELECT id, nombre, apellido, rol FROM usuarios WHERE rol IN ('ADMIN', 'SUPERADMIN') AND is_active = true"
+
+            const query = "SELECT usuario_id as id, nombre, apellido, rol FROM usuarios WHERE rol IN ('ADMIN', 'SUPERADMIN') AND is_active = true";
+            const result = await PostgresDB.getInstance().executeQuery(query);
+
+            res.json({ success: true, result: result.rows });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async verifySupervisor(req: Request, res: Response) {
+        const { admin_id, pin } = req.body;
+
+        try {
+            if (!admin_id || !pin) {
+                return res.status(400).json({ success: false, error: 'Faltan datos (admin_id, pin)' });
+            }
+
+            // Get user by ID to check PIN and Role
+            const userResult = await PostgresDB.getInstance().executeQuery(
+                'SELECT * FROM usuarios WHERE usuario_id = $1',
+                [admin_id]
+            );
+
+            if (userResult.rowCount === 0) {
+                return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+            }
+
+            const user = userResult.rows[0];
+
+            // Verify Role
+            if (!['ADMIN', 'SUPERADMIN'].includes(user.rol)) {
+                return res.status(403).json({ success: false, error: 'El usuario no tiene privilegios de supervisor' });
+            }
+
+            // Verify PIN (Bcrypt only)
+            if (!user.security_pin) {
+                // Returns false/error instead of throwing exception if null, per verification requirement
+                return res.status(400).json({ success: false, error: 'El usuario no tiene PIN de seguridad configurado' });
+            }
+
+            const isPinValid = await bcrypt.compare(pin, user.security_pin);
+
+            if (!isPinValid) {
+                return res.status(401).json({ success: false, error: 'PIN incorrecto' });
+            }
+
+            res.json({
+                success: true,
+                supervisor_name: `${user.nombre} ${user.apellido}`
+            });
+
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
 }

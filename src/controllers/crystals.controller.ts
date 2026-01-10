@@ -50,6 +50,44 @@ export class CrystalsController {
         }
     }
 
+    public async searchRange(req: Request, res: Response) {
+        const { esferaFrom, esferaTo, cilindroFrom, cilindroTo, material } = req.query;
+
+        try {
+            // Construimos una consulta dinámica simple
+            // Usamos COALESCE o comparaciones directas para manejar filtros opcionales
+            const query = `
+            SELECT * FROM cristales_stock 
+            WHERE 
+                ($1::text = '' OR esfera >= $1::numeric) AND
+                ($2::text = '' OR esfera <= $2::numeric) AND
+                ($3::text = '' OR cilindro >= $3::numeric) AND
+                ($4::text = '' OR cilindro <= $4::numeric) AND
+                ($5::text = 'ALL' OR material = $5)
+            ORDER BY esfera DESC, cilindro DESC
+        `;
+
+            const values = [
+                esferaFrom || '',
+                esferaTo || '',
+                cilindroFrom || '',
+                cilindroTo || '',
+                material || 'ALL'
+            ];
+
+            const result = await PostgresDB.getInstance().executeQuery(query, values);
+
+            res.json({
+                success: true,
+                result: result.rows
+            });
+
+        } catch (error) {
+            console.error("Error searching crystal range:", error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
     public async deductStock(esfera: string, cilindro: string, material: string, tratamiento: string, cantidad: number = 1) {
         try {
             // Check if exists first? Or direct update?

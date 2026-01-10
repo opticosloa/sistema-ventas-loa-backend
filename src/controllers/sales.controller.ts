@@ -16,7 +16,7 @@ export class SalesController {
     }
 
     public async createSale(req: Request, res: Response) {
-        const { cliente_id, urgente } = req.body;
+        const { cliente_id, urgente, descuento } = req.body;
 
         const vendedor_id = req.user?.id;
         const sucursal_id = req.user?.sucursal_id;
@@ -38,6 +38,20 @@ export class SalesController {
                 urgente ?? false
             ]);
             const venta_id = result[0]?.sp_venta_crear || result[0]?.venta_id;
+
+            // If discount is present, update the sale record directly
+            // This ensures compatibility even if sp_venta_crear doesn't accept the parameter yet
+            // If discount is present, update the sale record directly
+            // This ensures compatibility even if sp_venta_crear doesn't accept the parameter yet
+            if (descuento !== undefined && descuento !== null) {
+                const discountValue = Number(descuento);
+                if (!isNaN(discountValue) && discountValue > 0) {
+                    await PostgresDB.getInstance().executeQuery(
+                        'UPDATE ventas SET descuento = $1 WHERE venta_id = $2',
+                        [discountValue, venta_id]
+                    );
+                }
+            }
 
             res.json({ success: true, venta_id });
         } catch (error) {
