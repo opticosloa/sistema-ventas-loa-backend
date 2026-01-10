@@ -114,4 +114,37 @@ export class CrystalsController {
             return false;
         }
     }
+    public async createCrystal(req: Request, res: Response) {
+        const { material, tratamiento, esfera, cilindro, stock, stock_minimo, ubicacion, precio_costo, precio_venta } = req.body;
+
+        try {
+            // Basic validation
+            if (!material || !tratamiento || esfera === undefined || cilindro === undefined) {
+                return res.status(400).json({ success: false, message: "Missing required fields" });
+            }
+
+            // Check if exists? Unique constraint?
+            // Assuming (esfera, cilindro, material, tratamiento) is unique key.
+            // If exists, maybe update stock? Or error?
+            // "Batalla Naval" style implies uniqueness.
+            // Let's try insert, if error (conflict), return error.
+
+            const result = await PostgresDB.getInstance().executeQuery(
+                `INSERT INTO cristales_stock 
+                 (material, tratamiento, esfera, cilindro, stock, stock_minimo, ubicacion, precio_costo, precio_venta)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 RETURNING *`,
+                [material, tratamiento, esfera, cilindro, stock || 0, stock_minimo || 0, ubicacion, precio_costo || 0, precio_venta || 0]
+            );
+
+            res.status(201).json({ success: true, result: result.rows[0] });
+
+        } catch (error: any) {
+            console.error("Error creating crystal:", error);
+            if (error.code === '23505') { // Unique violation code in Postgres
+                return res.status(409).json({ success: false, message: "Crystal already exists (Duplicate key)" });
+            }
+            res.status(500).json({ success: false, error: error.message || error });
+        }
+    }
 }

@@ -18,7 +18,7 @@ export class UsersController {
     }
 
     public async createUser(req: Request, res: Response) {
-        const { nombre, apellido, email, password_hash, rol, is_active, sucursal_id }: User = req.body;
+        const { nombre, apellido, email, password_hash, rol, is_active, sucursal_id, cuit, telefono, direccion, fecha_nacimiento, cuenta_corriente }: User = req.body;
 
         try {
             let emailUpper = email.toUpperCase();
@@ -31,8 +31,13 @@ export class UsersController {
                 emailUpper,
                 password,
                 rolUpper,
-                is_active,
-                sucursal_id
+                is_active ?? true,
+                sucursal_id || 1, // Default to 1 if not provided, or handle as error
+                cuit,
+                telefono,
+                direccion,
+                fecha_nacimiento,
+                cuenta_corriente || 0
             ]);
 
             const user = result.rows[0];

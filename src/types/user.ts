@@ -10,4 +10,9 @@ export interface User {
     updated_at?: string;
     sucursal_id: string;
     security_pin?: string;
+    cuit?: number;
+    telefono?: string;
+    direccion?: string;
+    fecha_nacimiento?: string;
+    cuenta_corriente?: number;
 }

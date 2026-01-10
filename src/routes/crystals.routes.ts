@@ -7,5 +7,6 @@ const controller = CrystalsController.getInstance();
 
 router.get('/check-stock', authMiddleware, controller.checkStock.bind(controller));
 router.get('/search-range', authMiddleware, controller.searchRange.bind(controller));
+router.post('/', authMiddleware, controller.createCrystal.bind(controller));
 
 export default router;
