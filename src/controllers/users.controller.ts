@@ -159,8 +159,8 @@ export class UsersController {
         try {
             res.clearCookie('token', {
                 httpOnly: true,
-                secure: envs.NODE_ENV === 'production',
-                sameSite: 'lax'
+                secure: true,
+                sameSite: 'none'
             });
             res.json({ success: true });
         } catch (error) {
