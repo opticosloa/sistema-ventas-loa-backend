@@ -99,4 +99,14 @@ export class DoctorController {
             res.status(500).json({ success: false, error });
         }
     }
+    public async searchDoctors(req: Request, res: Response) {
+        const { q } = req.query;
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_doctor_get_by_nombre', [q]);
+            res.json({ success: true, result: result.rows });
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
 }

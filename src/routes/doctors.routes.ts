@@ -6,6 +6,7 @@ const controller = DoctorController.getInstance();
 
 router.post('/', controller.createDoctor.bind(controller));
 router.get('/', controller.getDoctors.bind(controller));
+router.get('/search', controller.searchDoctors.bind(controller));
 router.get('/by-matricula/:matricula', controller.getDoctorByMatricula.bind(controller));
 router.get('/:id', controller.getDoctorById.bind(controller));
 router.put('/:id', controller.updateDoctor.bind(controller));
