@@ -53,6 +53,18 @@ export class SalesController {
                 }
             }
 
+            // Save current Dolar Rate snapshot
+            const rateResult = await PostgresDB.getInstance().executeQuery(
+                "SELECT valor FROM config_global WHERE clave = 'cotizacion_dolar'"
+            );
+            const currentRate = rateResult.rows[0]?.valor || 0;
+            if (currentRate > 0) {
+                await PostgresDB.getInstance().executeQuery(
+                    'UPDATE ventas SET cotizacion_dolar = $1 WHERE venta_id = $2',
+                    [currentRate, venta_id]
+                );
+            }
+
             res.json({ success: true, venta_id });
         } catch (error) {
             console.log(error);
@@ -119,14 +131,39 @@ export class SalesController {
 
     public async addItem(req: Request, res: Response) {
         const { id } = req.params;
-        const { producto_id, cantidad, precio_unitario } = req.body;
+        const { producto_id, cantidad } = req.body;
 
         try {
+            // 1. Get Product Details (USD and ARS prices)
+            const productRes = await PostgresDB.getInstance().executeQuery(
+                'SELECT precio_usd, precio_venta FROM productos WHERE producto_id = $1',
+                [producto_id]
+            );
+            const product = productRes.rows[0];
+
+            if (!product) {
+                return res.status(404).json({ success: false, error: 'Producto no encontrado' });
+            }
+
+            // 2. Get Current Dolar Rate
+            const rateRes = await PostgresDB.getInstance().executeQuery(
+                "SELECT valor FROM config_global WHERE clave = 'cotizacion_dolar'"
+            );
+            const rate = parseFloat(rateRes.rows[0]?.valor || 0);
+
+            // 3. Calculate Final Price in ARS
+            let finalPrice = Number(product.precio_venta) || 0; // Default to legacy ARS price
+
+            if (product.precio_usd && Number(product.precio_usd) > 0 && rate > 0) {
+                finalPrice = Number(product.precio_usd) * rate;
+            }
+
+            // 4. Call SP to add item with calculated price
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_agregar', [
                 id,
                 producto_id,
                 cantidad,
-                precio_unitario
+                finalPrice
             ]);
             res.json({ success: true, result });
         } catch (error) {

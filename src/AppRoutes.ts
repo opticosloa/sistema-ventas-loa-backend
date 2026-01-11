@@ -13,6 +13,8 @@ import tenantsRoutes from './routes/tenants.routes';
 import paymentsRoutes from './routes/payments.routes';
 import salesItemsRoutes from './routes/sales_items.routes';
 import crystalsRoutes from './routes/crystals.routes';
+import cashierRoutes from './routes/cashier.routes';
+import currencyRoutes from './routes/currency.routes';
 
 export class AppRoutes {
     static get routes(): Router {
@@ -32,6 +34,8 @@ export class AppRoutes {
         router.use('/api/alerts', alertsRoutes);
         router.use('/api/payments', paymentsRoutes);
         router.use('/api/crystals', crystalsRoutes);
+        router.use('/api/cashier', cashierRoutes);
+        router.use('/api/currency', currencyRoutes);
 
         return router;
     }

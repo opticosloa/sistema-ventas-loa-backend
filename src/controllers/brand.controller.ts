@@ -70,4 +70,16 @@ export class BrandController {
             res.status(500).json({ success: false, error });
         }
     }
+
+    // En BrandController.ts
+    public async searchBrands(req: Request, res: Response) {
+        const { q } = req.query;
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_marca_get_by_nombre', [q]);
+            res.json({ success: true, result: result.rows });
+        } catch (error) {
+            res.status(500).json({ success: false, error });
+        }
+    }
+
 }
