@@ -109,4 +109,33 @@ export class TicketsController {
             res.status(500).json({ success: false, error: error.message });
         }
     }
+
+    public async getTicketById(req: Request, res: Response) {
+        const { id } = req.params;
+
+        try {
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_ticket_get_by_id', [id]);
+
+            // Verificamos si el SP devolvió filas
+            const ticket = result.rows ? result.rows[0] : (result[0] || null);
+
+            if (!ticket) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'No se encontró el ticket solicitado'
+                });
+            }
+
+            res.json({
+                success: true,
+                result: ticket
+            });
+        } catch (error: any) {
+            console.error('Error fetching ticket by ID:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    }
 }
