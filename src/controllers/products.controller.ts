@@ -24,7 +24,7 @@ export class ProductsController {
 
             if (tipo) {
                 query += ' AND tipo = $1';
-                params.push(tipo);
+                params.push((tipo as string).toUpperCase());
             }
 
             query += ' ORDER BY nombre ASC';
