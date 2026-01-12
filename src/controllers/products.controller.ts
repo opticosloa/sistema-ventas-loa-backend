@@ -136,7 +136,7 @@ export class ProductsController {
     public async getProductById(req: Request, res: Response) {
         const { id } = req.params;
         try {
-            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_get_by_id', [id]);
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_producto_get_by_id', [id]);
             if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
             res.json({ success: true, result: result.rows[0] });
         } catch (error) {
@@ -147,7 +147,7 @@ export class ProductsController {
     public async productsSearch(req: Request, res: Response) {
         const { search } = req.params;
         try {
-            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_buscar', [search]);
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_producto_buscar', [search]);
             res.json({ success: true, result: result.rows });
         } catch (error) {
             res.status(500).json({ success: false, error });
@@ -158,8 +158,7 @@ export class ProductsController {
         const { tipo } = req.params;
 
         try {
-            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_get_by_tipo', [tipo]
-            );
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_producto_get_by_tipo', [tipo]);
             res.json({
                 success: true,
                 result: result.rows
