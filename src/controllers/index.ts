@@ -4,7 +4,7 @@ export * from './brand.controller';
 export * from './cashier.controller';
 export * from './clients.controller';
 export * from './crystals.controller';
-export * from './CurrencyController';
+export * from './currency.controller';
 export * from './doctors.controller';
 export * from './getStockAlerts';
 export * from './payments.controller';
