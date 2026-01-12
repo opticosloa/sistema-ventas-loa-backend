@@ -329,12 +329,10 @@ export class PaymentService {
         // 2. Create Payment Intent
         const url = `https://api.mercadopago.com/point/integration-api/devices/${device_id}/payment-intents`;
         const payload = {
-            // La API de Point requiere el monto en CENTAVOS (entero)
-            amount: Math.round(Number(monto) * 100),
-            description: `Venta #${venta_id}`,
+            amount: Math.round(monto * 100), // Importante: Point suele pedir el monto en CENTAVOS (ej: $15.00 -> 1500)
             additional_info: {
-                external_reference: pago_id,
-                print_on_terminal: true
+                external_reference: pago_id, // Esto sí es útil
+                print_on_terminal: true // Opcional, si quieres que imprima ticket
             }
         };
 
