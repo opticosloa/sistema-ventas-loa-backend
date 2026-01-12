@@ -80,8 +80,13 @@ export class PaymentsController {
 
         try {
             // Pasamos el resourceId para que el servicio busque los detalles en la API de MP
-            await PaymentService.getInstance().handleMPWebhook(mp_preference_id, resourceType, resourceId, data);
-            res.sendStatus(200);
+            const found = await PaymentService.getInstance().handleMPWebhook(mp_preference_id, resourceType, resourceId, data);
+
+            if (found === false) {
+                res.status(404).json({ error: 'Payment not found yet' });
+            } else {
+                res.sendStatus(200);
+            }
         } catch (error) {
             console.error("Error procesando webhook:", error);
             res.sendStatus(500);

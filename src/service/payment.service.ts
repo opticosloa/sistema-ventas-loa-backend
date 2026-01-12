@@ -287,6 +287,11 @@ export class PaymentService {
             body: JSON.stringify(payload)
         });
 
+        if (response.status === 204) {
+            console.log("✅ MP respondió 204 No Content (Orden creada, QR ya visible en POS o Pantalla)");
+            return { qr_data: null, pago_id, status: 'no_content' };
+        }
+
         const text = await response.text();
         console.log("📥 Respuesta cruda de MP:", text);
 
@@ -424,35 +429,21 @@ export class PaymentService {
             // Log informativo
             console.log(`Procesando Webhook MP: Type=${type}, ID=${resourceId}, Status=${mp_status}, Ref=${external_reference}`);
 
-            // Llamada al SP
-            await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_status', [
-                final_preference_id || null,
-                // If it's a merchant_order, we might not have a single payment_id, but the logic expects one.
-                // Actually sp_pago_actualizar_status might use external_reference or preference_id to find the payment/sale.
-                // If we pass external_reference (pago_id) as the 2nd arg instead of mp_payment_id, 
-                // wait, the SP signature is likely (preference_id, mp_payment_id, status).
-                // If the SP finds by preference_id, sending null for payment_id might be okay or not.
-                // BUT, external_reference IS our pago_id.
-                // If type is merchant_order, we might not have a specific 'payment_id' to store if multiple payments exist.
-                // BUT usually for single QR scan, there is one payment.
-                // Let's pass resourceId as 'reference' for now.
-                resourceId,
-                mp_status
+
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_status', [
+                final_preference_id || null,  // p_preference_id
+                mp_status,                    // p_status
+                resourceId                    // p_merchant_order_id
             ]);
 
-            // NOTE: The SP probably expects `mp_payment_id` to be stored. 
-            // If we send merchant_order_id, it might be confusing but legal if we just want to track it.
-            // Critical: The SP likely updates based on ... wait.
-            // sp_pago_actualizar_status(preference_id?, mp_id?, status)
-            // If we don't have preference_id (because QR doesn't use it, it uses external_reference=pago_id),
-            // The SP might need to be smart enough.
-            // User request says: "actualice el estado de la venta como 'Iniciada'" -> actually 'Iniciada'? Or 'PAGADA'?
-            // The prompt says: "el sistema busque los detalles y actualice el estado de la venta como 'Iniciada'" 
-            // -> Maybe they meant the *start* of the flow? 
-            // Re-reading: "actualice el estado de la venta como 'Iniciada'"
+            // Check if updated
+            const updated = result.rows?.[0]?.sp_pago_actualizar_status;
+            if (updated === false) {
+                console.warn(`[MP Webhook] Pago no encontrado en DB para actualizar. Pref: ${final_preference_id}`);
+                return false; // Not found
+            }
 
-            // If the status is 'opened', it is 'Iniciada' (PENDING).
-
+            return true;
         } catch (error: any) {
             // ... (logging)
             if (error?.status === 404 || error?.response?.status === 404) {
