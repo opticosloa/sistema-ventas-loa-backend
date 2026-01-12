@@ -127,6 +127,10 @@ export class PrescriptionController {
         }
       }
 
+      // Let's stick closer to the user request about inputs
+      if (finalDoctorId === "") finalDoctorId = null;
+      if (finalClienteId === "") finalClienteId = null;
+
       if (!finalDoctorId) {
         return res.status(400).json({
           success: false,
@@ -140,10 +144,10 @@ export class PrescriptionController {
         .callStoredProcedure('sp_prescripcion_crear', [
           finalClienteId,
           finalDoctorId,
-          fecha,
-          lejos,
-          cerca,
-          multifocal,
+          fecha ? fecha.split('T')[0] : null,
+          JSON.stringify(lejos || {}),
+          JSON.stringify(cerca || {}),
+          JSON.stringify(multifocal || {}),
           observaciones,
           image_url,
           obraSocial || null
@@ -151,17 +155,15 @@ export class PrescriptionController {
 
       const prescripcion_id = prescripcionResult.rows[0].prescripcion_id;
 
-      // 3b. Descontar Stock de Cristales (Async, no bloqueante o await?)
-      // User requested "Al confirmar venta", pero aqui estamos creando la venta/prescripcion.
-      // Asumimos que se descuenta al crear.
+      // 3b. Descontar Stock de Cristales (Async)
       const crystalCtrl = CrystalsController.getInstance();
 
       const deductEye = async (section: any, ojoKey: 'OD' | 'OI') => {
         if (section && section[ojoKey] && section[ojoKey].esfera && section[ojoKey].cilindro) {
           const esf = section[ojoKey].esfera;
           const cil = section[ojoKey].cilindro;
-          const mat = section.tipo || ''; // Mapped from 'Tipo'
-          const trat = section.color || 'Blanco'; // Mapped from 'Color' or default
+          const mat = section.tipo || '';
+          const trat = section.color || 'Blanco';
 
           // Try deduct
           await crystalCtrl.deductStock(esf, cil, mat, trat, 1);
@@ -180,34 +182,24 @@ export class PrescriptionController {
       }
 
       // 4. Crear Venta Automáticamente
-      // Necesitamos vendedor_id y sucursal_id del token (req.user)
       const vendedor_id = req.user?.id;
       const sucursal_id = req.user?.sucursal_id;
 
       if (!vendedor_id || !sucursal_id) {
-        // Si por alguna razón falla el contexto, devolvemos success pero sin venta (o error, segun logica de negocio - aqui error para forzar auth)
         console.error("Missing user context for auto-sale creation");
-        // Opcional: rollback prescription? Por ahora retornamos lo que hay.
       } else {
+        // sp_venta_crear(vendedor, cliente, sucursal, urgente, descuento)
         const ventaResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_crear', [
           vendedor_id,
           finalClienteId,
           sucursal_id,
-          false // urgente default false
+          false,
+          descuento || 0
         ]);
 
-        const venta_id = ventaResult[0]?.sp_venta_crear || ventaResult[0]?.venta_id;
-
-        // Opcional: Asociar la venta con la prescripción si existiera una tabla intermedia, 
-        // pero por ahora solo devolvemos el ID.
-
-        // Update discount if present
-        if (descuento && Number(descuento) > 0) {
-          await PostgresDB.getInstance().executeQuery(
-            'UPDATE ventas SET descuento = $1 WHERE venta_id = $2',
-            [descuento, venta_id]
-          );
-        }
+        // Extract ID securely
+        const ventaData = ventaResult[0]?.sp_venta_crear || ventaResult[0] || {};
+        const venta_id = ventaData.venta_id;
 
         return res.json({
           success: true,
@@ -221,8 +213,8 @@ export class PrescriptionController {
         prescripcion_id
       });
 
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("ERROR EN CREATE_PRESCRIPTION:", error.message, error.stack);
       res.status(500).json({ success: false, error });
     }
   }

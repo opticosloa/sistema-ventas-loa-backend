@@ -29,14 +29,13 @@ export class CrystalsController {
             // e.g. -2.00 vs -2. 
             // Postgres numeric comparison should handle it if types are numeric.
 
-            const result = await PostgresDB.getInstance().executeQuery(
-                `SELECT * FROM cristales_stock 
-                 WHERE esfera = $1 
-                   AND cilindro = $2 
-                   AND material = $3 
-                   AND tratamiento = $4`,
-                [esfera, cilindro, material, tratamiento]
-            );
+            // Ensure numeric types for SP
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_verificar', [
+                Number(esfera),
+                Number(cilindro),
+                material,
+                tratamiento
+            ]);
 
             if (result.rows.length > 0) {
                 res.json({ success: true, result: result.rows[0] });
@@ -54,37 +53,23 @@ export class CrystalsController {
         const { esferaFrom, esferaTo, cilindroFrom, cilindroTo, material } = req.query;
 
         try {
-            // Construimos una consulta dinámica simple
-            // Usamos COALESCE o comparaciones directas para manejar filtros opcionales
-            const query = `
-            SELECT * FROM cristales_stock 
-            WHERE 
-                ($1::text = '' OR esfera >= $1::numeric) AND
-                ($2::text = '' OR esfera <= $2::numeric) AND
-                ($3::text = '' OR cilindro >= $3::numeric) AND
-                ($4::text = '' OR cilindro <= $4::numeric) AND
-                ($5::text = 'ALL' OR material = $5)
-            ORDER BY esfera DESC, cilindro DESC
-        `;
-
-            const values = [
+            // Llamada al nuevo Stored Procedure
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_listar_rango', [
                 esferaFrom || '',
                 esferaTo || '',
                 cilindroFrom || '',
                 cilindroTo || '',
                 material || 'ALL'
-            ];
-
-            const result = await PostgresDB.getInstance().executeQuery(query, values);
+            ]);
 
             res.json({
                 success: true,
                 result: result.rows
             });
 
-        } catch (error) {
-            console.error("Error searching crystal range:", error);
-            res.status(500).json({ success: false, error });
+        } catch (error: any) {
+            console.error("❌ ERROR DETALLADO:", error.message, error.stack);
+            res.status(500).json({ success: false, error: error.message });
         }
     }
 
@@ -95,18 +80,17 @@ export class CrystalsController {
             // We need to ensure stock >= qty or allow negative/warning?
             // User requirement: "Descontar 1 unidad"
 
-            const result = await PostgresDB.getInstance().executeQuery(
-                `UPDATE cristales_stock 
-                 SET stock = stock - $1 
-                 WHERE esfera = $2 
-                   AND cilindro = $3 
-                   AND material = $4 
-                   AND tratamiento = $5
-                   AND stock >= $1
-                 RETURNING stock`,
-                [cantidad, esfera, cilindro, material, tratamiento]
-            );
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_descontar', [
+                esfera,
+                cilindro,
+                material,
+                tratamiento,
+                cantidad
+            ]);
 
+            // SP should return true/false or updated row. 
+            // Assuming it returns a boolean 'success' or the updated row if successful.
+            // If it returns a set of rows, length > 0 means success.
             return result.rows.length > 0;
 
         } catch (error) {
@@ -129,22 +113,23 @@ export class CrystalsController {
             // "Batalla Naval" style implies uniqueness.
             // Let's try insert, if error (conflict), return error.
 
-            const result = await PostgresDB.getInstance().executeQuery(
-                `INSERT INTO cristales_stock 
-                 (material, tratamiento, esfera, cilindro, stock, stock_minimo, ubicacion, precio_costo, precio_venta)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                 RETURNING *`,
-                [material, tratamiento, esfera, cilindro, stock || 0, stock_minimo || 0, ubicacion, precio_costo || 0, precio_venta || 0]
-            );
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_crear', [
+                material,
+                tratamiento,
+                Number(esfera),
+                Number(cilindro),
+                stock || 0,
+                stock_minimo || 0,
+                ubicacion,
+                precio_costo || 0,
+                precio_venta || 0
+            ]);
 
             res.status(201).json({ success: true, result: result.rows[0] });
 
         } catch (error: any) {
-            console.error("Error creating crystal:", error);
-            if (error.code === '23505') { // Unique violation code in Postgres
-                return res.status(409).json({ success: false, message: "Crystal already exists (Duplicate key)" });
-            }
-            res.status(500).json({ success: false, error: error.message || error });
+            console.error("❌ ERROR DETALLADO:", error.message, error.stack);
+            res.status(500).json({ success: false, error: error.message, detail: error.detail });
         }
     }
 }

@@ -16,8 +16,7 @@ export class SalesController {
     }
 
     public async createSale(req: Request, res: Response) {
-        const { cliente_id, urgente, descuento } = req.body;
-
+        let { cliente_id, urgente, descuento } = req.body;
         const vendedor_id = req.user?.id;
         const sucursal_id = req.user?.sucursal_id;
 
@@ -26,7 +25,8 @@ export class SalesController {
             return;
         }
 
-        if (!cliente_id) {
+        // Validate UUIDs
+        if (!cliente_id || cliente_id === "") {
             return res.status(400).json({ success: false, error: 'cliente_id requerido' });
         }
 
@@ -35,34 +35,17 @@ export class SalesController {
                 vendedor_id,
                 cliente_id,
                 sucursal_id,
-                urgente ?? false
+                urgente ?? false,
+                descuento || 0
             ]);
-            const venta_id = result[0]?.sp_venta_crear || result[0]?.venta_id;
 
-            // If discount is present, update the sale record directly
-            // This ensures compatibility even if sp_venta_crear doesn't accept the parameter yet
-            // If discount is present, update the sale record directly
-            // This ensures compatibility even if sp_venta_crear doesn't accept the parameter yet
-            if (descuento !== undefined && descuento !== null) {
-                const discountValue = Number(descuento);
-                if (!isNaN(discountValue) && discountValue > 0) {
-                    await PostgresDB.getInstance().executeQuery(
-                        'UPDATE ventas SET descuento = $1 WHERE venta_id = $2',
-                        [discountValue, venta_id]
-                    );
-                }
-            }
+            // SP returns json_build_object
+            // result[0] might be { sp_venta_crear: { venta_id: 123, ... } }
+            const ventaData = result[0]?.sp_venta_crear || result[0];
+            const venta_id = ventaData?.venta_id;
 
-            // Save current Dolar Rate snapshot
-            const rateResult = await PostgresDB.getInstance().executeQuery(
-                "SELECT valor FROM config_global WHERE clave = 'cotizacion_dolar'"
-            );
-            const currentRate = rateResult.rows[0]?.valor || 0;
-            if (currentRate > 0) {
-                await PostgresDB.getInstance().executeQuery(
-                    'UPDATE ventas SET cotizacion_dolar = $1 WHERE venta_id = $2',
-                    [currentRate, venta_id]
-                );
+            if (!venta_id) {
+                throw new Error("No se pudo obtener el ID de la venta creada");
             }
 
             res.json({ success: true, venta_id });
@@ -131,39 +114,16 @@ export class SalesController {
 
     public async addItem(req: Request, res: Response) {
         const { id } = req.params;
-        const { producto_id, cantidad } = req.body;
+        const { producto_id, cantidad, precio_unitario } = req.body;
 
         try {
-            // 1. Get Product Details (USD and ARS prices)
-            const productRes = await PostgresDB.getInstance().executeQuery(
-                'SELECT precio_usd, precio_venta FROM productos WHERE producto_id = $1',
-                [producto_id]
-            );
-            const product = productRes.rows[0];
-
-            if (!product) {
-                return res.status(404).json({ success: false, error: 'Producto no encontrado' });
-            }
-
-            // 2. Get Current Dolar Rate
-            const rateRes = await PostgresDB.getInstance().executeQuery(
-                "SELECT valor FROM config_global WHERE clave = 'cotizacion_dolar'"
-            );
-            const rate = parseFloat(rateRes.rows[0]?.valor || 0);
-
-            // 3. Calculate Final Price in ARS
-            let finalPrice = Number(product.precio_venta) || 0; // Default to legacy ARS price
-
-            if (product.precio_usd && Number(product.precio_usd) > 0 && rate > 0) {
-                finalPrice = Number(product.precio_usd) * rate;
-            }
-
-            // 4. Call SP to add item with calculated price
+            // Frontend sends the calculated unit price (ARS or USD converted)
+            // Call SP directly with passed price
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_agregar', [
                 id,
                 producto_id,
                 cantidad,
-                finalPrice
+                precio_unitario || 0
             ]);
             res.json({ success: true, result });
         } catch (error) {
@@ -178,9 +138,10 @@ export class SalesController {
         try {
             if (!id) return res.status(400).json({ success: false, error: 'Venta ID requerido' });
 
-            const result = await SalesService.getInstance().getEstadoPago(id);
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_estado_pago_get', [id]);
+            const estado = result[0] || {};
 
-            if (!result) {
+            if (!estado || (!estado.estado_pago && !estado.estado_venta)) {
                 return res.status(404).json({
                     success: false,
                     error: 'Venta no encontrada'
@@ -189,8 +150,8 @@ export class SalesController {
 
             res.json({
                 success: true,
-                estado_pago: result?.estado_pago || 'PENDIENTE',
-                estado_venta: result?.estado_venta || 'PENDIENTE'
+                estado_pago: estado.estado_pago || 'PENDIENTE',
+                estado_venta: estado.estado_venta || 'PENDIENTE'
             });
         } catch (error) {
             console.log(error);
