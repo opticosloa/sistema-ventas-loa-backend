@@ -101,63 +101,84 @@ export class PaymentService {
     private static generatedPosId: string | undefined;
 
     private async _getOrCreatePOS(): Promise<string> {
-        if (envs.MP_EXTERNAL_POS_ID) return envs.MP_EXTERNAL_POS_ID;
-        if (PaymentService.generatedPosId) return PaymentService.generatedPosId;
-
-        console.log('MP_EXTERNAL_POS_ID no configurado. Buscando/Creando POS automático...');
+        // 1. Determine Fixed External ID
+        const targetExternalId = envs.MP_EXTERNAL_POS_ID || 'LOA_GENERAL_POS';
         const headers = {
             'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
         };
 
-        // 1. Obtener Store (Sucursal) existente o crear una
-        let storeId: string;
-        const storesResponse = await fetch(`https://api.mercadopago.com/users/${envs.MP_USER_ID}/stores/search?limit=1`, { headers });
-
-        if (!storesResponse.ok) throw new Error('Error buscando stores en MP');
-        const storesData: any = await storesResponse.json();
-
-        if (storesData.results && storesData.results.length > 0) {
-            storeId = storesData.results[0].id;
-        } else {
-            console.log('No se encontraron stores. Creando una...');
-            const storePayload = {
-                name: "Sucursal Principal",
-                business_hours: {
-                    monday: [{ open: "08:00", close: "18:00" }]
-                },
-                location: {
-                    street_number: "123",
-                    street_name: "Calle Falsa",
-                    city_name: "Capital",
-                    state_name: "Capital",
-                    latitude: -34.6037,
-                    longitude: -58.3816,
-                    reference: "Centro"
-                },
-                external_id: "STORE_AUTO_001"
-            };
-            const createStoreRes = await fetch(`https://api.mercadopago.com/users/${envs.MP_USER_ID}/stores`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(storePayload)
-            });
-            if (!createStoreRes.ok) {
-                const txt = await createStoreRes.text();
-                throw new Error(`Error creando Store en MP: ${txt}`);
+        // 2. Search First (Idempotency)
+        try {
+            const searchRes = await fetch(`https://api.mercadopago.com/pos?external_id=${targetExternalId}`, { headers });
+            if (searchRes.ok) {
+                const searchData: any = await searchRes.json();
+                // results o paging? MP POS API returns { results: [...] } usually
+                const results = searchData.results || [];
+                if (results.length > 0) {
+                    const existingPos = results[0];
+                    console.log(`✅ POS encontrado: ${existingPos.name} (ID Interno: ${existingPos.id})`);
+                    return targetExternalId;
+                }
             }
-            const newStore: any = await createStoreRes.json();
-            storeId = newStore.id;
+        } catch (error) {
+            console.warn("⚠️ Error buscando POS existente, intentando crear uno nuevo...", error);
         }
 
-        // 2. Crear POS asociado a la Store
-        const externalId = `POS_AUTO_${Date.now()}`;
+        console.log(`POS '${targetExternalId}' no existe. Iniciando creación...`);
+
+        // 3. Create Store if needed (Only required if creating POS)
+        let storeId: string;
+        try {
+            const storesResponse = await fetch(`https://api.mercadopago.com/users/${envs.MP_USER_ID}/stores/search?limit=1`, { headers });
+            if (!storesResponse.ok) throw new Error('Error buscando stores en MP');
+
+            const storesData: any = await storesResponse.json();
+            if (storesData.results && storesData.results.length > 0) {
+                storeId = storesData.results[0].id;
+                console.log(`🏢 Store encontrada: ${storesData.results[0].name} (${storeId})`);
+            } else {
+                console.log('🏢 No se encontraron stores. Creando una nueva...');
+                const storePayload = {
+                    name: "Sucursal Principal LOA",
+                    business_hours: {
+                        monday: [{ open: "08:00", close: "20:00" }]
+                    },
+                    location: {
+                        street_number: "123",
+                        street_name: "Calle Principal",
+                        city_name: "Ciudad",
+                        state_name: "Estado",
+                        latitude: -34.6037,
+                        longitude: -58.3816,
+                        reference: "Centro"
+                    }, // Default dummy location if not provided
+                    external_id: "STORE_LOA_MAIN"
+                };
+                const createStoreRes = await fetch(`https://api.mercadopago.com/users/${envs.MP_USER_ID}/stores`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(storePayload)
+                });
+                if (!createStoreRes.ok) {
+                    const txt = await createStoreRes.text();
+                    throw new Error(`Error creando Store en MP: ${txt}`);
+                }
+                const newStore: any = await createStoreRes.json();
+                storeId = newStore.id;
+            }
+        } catch (error) {
+            console.error("Error gestionando Store:", error);
+            throw error;
+        }
+
+        // 4. Create POS associated to Store
         const posPayload = {
-            name: "Caja Principal Auto",
+            name: "Caja Principal LOA",
             fixed_amount: true,
             store_id: Number(storeId),
-            external_store_id: "STORE_AUTO_001",
-            external_id: externalId,
+            external_store_id: "STORE_LOA_MAIN",
+            external_id: targetExternalId,
             category: 621102 // Retail
         };
 
@@ -169,14 +190,16 @@ export class PaymentService {
 
         if (!createPosRes.ok) {
             const txt = await createPosRes.text();
-            throw new Error(`Error creando POS auto: ${txt}`);
+            throw new Error(`Error creando POS: ${txt}`);
         }
 
-        // const posData = await createPosRes.json();
+        console.log(`✅ POS creado exitosamente: ${targetExternalId}`);
 
-        console.log(`POS automático creado: ${externalId}`);
-        PaymentService.generatedPosId = externalId;
-        return externalId;
+        // 5. Propagation Delay (Only on creation)
+        console.log("Esperando 2 segundos para propagación...");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        return targetExternalId;
     }
 
     public async getPointDevices() {
