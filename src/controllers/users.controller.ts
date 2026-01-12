@@ -17,6 +17,24 @@ export class UsersController {
         return UsersController.instance;
     }
 
+    private getCookieOptions() {
+        let domain: string | undefined;
+        try {
+            const url = new URL(envs.FRONT_URL);
+            domain = url.hostname;
+        } catch (e) {
+            console.warn('Invalid FRONT_URL for cookie domain:', envs.FRONT_URL);
+        }
+
+        return {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none' as const,
+            maxAge: 16 * 60 * 60 * 1000, // 16 hours
+            domain: domain
+        };
+    }
+
     public async createUser(req: Request, res: Response) {
         const { nombre, apellido, email, password_hash, rol, is_active, sucursal_id, cuit, telefono, direccion, fecha_nacimiento, cuenta_corriente }: User = req.body;
 
@@ -32,7 +50,7 @@ export class UsersController {
                 password,
                 rolUpper,
                 is_active ?? true,
-                sucursal_id || 1, // Default to 1 if not provided, or handle as error
+                sucursal_id,
                 cuit,
                 telefono,
                 direccion,
@@ -141,12 +159,7 @@ export class UsersController {
             },
                 envs.JWT_SECRET, { expiresIn: '16h' });
 
-            res.cookie('token', token, {
-                httpOnly: true,
-                secure: true, // true in production
-                sameSite: 'none', // Protects against CSRF
-                maxAge: 16 * 60 * 60 * 1000 // 16 hours
-            });
+            res.cookie('token', token, this.getCookieOptions());
 
             res.json({ success: true, user: userWithoutPassword, token });
         } catch (error) {
@@ -157,11 +170,7 @@ export class UsersController {
 
     public async logoutUser(req: Request, res: Response) {
         try {
-            res.clearCookie('token', {
-                httpOnly: true,
-                secure: true,
-                sameSite: 'none'
-            });
+            res.clearCookie('token', this.getCookieOptions());
             res.json({ success: true });
         } catch (error) {
             console.log(error);
@@ -222,12 +231,7 @@ export class UsersController {
                 }
             });
         } catch (error) {
-            res.clearCookie('token', {
-                httpOnly: true,
-                secure: true, // true in production
-                sameSite: 'none', // Protects against CSRF
-                maxAge: 16 * 60 * 60 * 1000 // 16 hours
-            });
+            res.clearCookie('token', this.getCookieOptions());
             return res.status(401).json({ success: false });
         }
     }
@@ -296,6 +300,71 @@ export class UsersController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async updatePin(req: Request, res: Response) {
+        const { id } = req.params;
+        const { pin } = req.body;
+
+        try {
+            if (!pin || pin.length < 4) {
+                return res.status(400).json({ success: false, error: 'El PIN debe tener al menos 4 dígitos' });
+            }
+
+            const pinHash = bcrypt.hashSync(pin, envs.BCRYPT_SALT_ROUNDS);
+
+            await PostgresDB.getInstance().callStoredProcedure('sp_usuario_actualizar_pin', [
+                id,
+                pinHash
+            ]);
+
+            res.json({ success: true, message: 'PIN actualizado correctamente' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async updateProfile(req: Request, res: Response) {
+        const { id } = req.params;
+        const { nombre, apellido, telefono, direccion, fecha_nacimiento } = req.body;
+
+        try {
+            // 1. Obtener datos actuales
+            const userResult = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_id', [id]);
+
+            if (!userResult.rows || userResult.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+            }
+
+            const currentUser = userResult.rows[0];
+
+            // 2. Ejecutar la edición 
+            // Nota: Asegúrate de que el orden de los parámetros coincida con tu SP SQL
+            await PostgresDB.getInstance().callStoredProcedure('sp_usuario_editar', [
+                id,
+                nombre || currentUser.nombre,
+                apellido || currentUser.apellido,
+                currentUser.email,
+                currentUser.rol,
+                currentUser.is_active,
+                currentUser.sucursal_id,
+                currentUser.cuit || null, // Manejo de nulos
+                telefono || currentUser.telefono,
+                direccion || currentUser.direccion,
+                fecha_nacimiento || currentUser.fecha_nacimiento,
+                currentUser.cuenta_corriente
+            ]);
+
+            res.json({ success: true, message: 'Perfil actualizado correctamente' });
+
+        } catch (error: any) {
+            console.error('Error updating profile:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Error interno al actualizar perfil'
+            });
         }
     }
 }

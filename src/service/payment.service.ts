@@ -257,6 +257,10 @@ export class PaymentService {
         // 3. Payload Limpio y Validado
         const totalAmount = parseFloat(Number(monto).toFixed(2)); // Aseguramos 2 decimales máx.
 
+        //  SE MODIFICÓ DESPUES DE QUE LOS PAGOS POR POINT FUNCIONEN, BORRAR SI PASA ALGO Y USAR API_URL EN notification_url
+        // Limpiar URL base
+        const baseApi = envs.API_URL.replace(/\/$/, "");
+
         const payload = {
             external_reference: pago_id.toString(),
             title: title.substring(0, 25), // MP tiene límites de caracteres
@@ -273,7 +277,7 @@ export class PaymentService {
                     total_amount: totalAmount
                 }
             ],
-            notification_url: `${envs.API_URL}/api/payments/mercadopago/webhook`
+            notification_url: `${baseApi}/api/payments/mercadopago/webhook`
         };
 
         console.log("📡 Enviando orden a MP:", JSON.stringify(payload));
@@ -361,8 +365,6 @@ export class PaymentService {
     }
 
     public async handleMPWebhook(mp_preference_id: string | undefined, type: any, id: any, data: any) {
-        // En V2 el tipo suele venir como "payment" o "topic=payment" (IPN)
-        // Also handling 'merchant_order' for In-Store QR
         if (type !== 'payment' && type !== 'merchant_order') {
             const topic = type || 'unknown';
             console.log('Evento ignorado (no es payment ni merchant_order):', topic);
@@ -380,8 +382,6 @@ export class PaymentService {
 
         try {
             // Consultar estado en Mercado Pago via API
-            // We use simple fetch for generic resource fetching to handle both Payments and MerchantOrders easily
-            // or use specific client classes.
             let mp_status = 'unknown';
             let external_reference = null;
             let final_preference_id = mp_preference_id;
@@ -392,9 +392,12 @@ export class PaymentService {
                 mp_status = paymentInfo.status || 'unknown';
                 external_reference = paymentInfo.external_reference;
 
+                console.log(`[Point Fix] Pago detectado. ID: ${resourceId}, Status: ${mp_status}, Ref: ${external_reference}`);
+
                 const derived_preference_id = paymentInfo.order?.id ? String(paymentInfo.order.id) : undefined;
                 final_preference_id = final_preference_id || derived_preference_id;
 
+                console.log(`[Point Fix] Pago detectado. ID: ${resourceId}, Status: ${mp_status}, Ref: ${external_reference}`);
             } else if (type === 'merchant_order') {
                 // Fetch Merchant Order
                 // client is MercadoPagoConfig
@@ -417,9 +420,6 @@ export class PaymentService {
                 // Mapped status: 
                 // opened -> PENDING
                 // closed -> PAGADA (if payments match total)
-
-                // However, usually Merchant Order contains payments. We might want to check the payments inside.
-                // For simplicity, if status is 'closed', we assume paid.
                 if (mp_status === 'closed') mp_status = 'approved';
                 if (mp_status === 'opened') mp_status = 'pending';
             }
@@ -430,19 +430,23 @@ export class PaymentService {
 
             const id_para_buscar = external_reference || final_preference_id;
 
+            if (!id_para_buscar) {
+                console.error(`[Webhook] No se pudo determinar un ID de búsqueda para el recurso ${resourceId}`);
+                return false;
+            }
+
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_status', [
                 id_para_buscar,    // Enviamos el UUID (pago_id)
                 mp_status,
                 resourceId
             ]);
-
-            // Check if updated
             const updated = result.rows?.[0]?.sp_pago_actualizar_status;
+            // Check if updated
             if (updated === false) {
-                console.warn(`[MP Webhook] Pago no encontrado en DB para actualizar. Pref: ${final_preference_id}`);
-                return false; // Not found
+                console.warn(`[Webhook] Pago no encontrado en DB. ID buscado: ${id_para_buscar}. Respondiendo 404 para reintento.`);
+                return false;
             }
-
+            console.log(`[Webhook] DB Actualizada con éxito para pago ${id_para_buscar}`);
             return true;
         } catch (error: any) {
             // ... (logging)

@@ -26,7 +26,13 @@ jest.mock('jsonwebtoken', () => ({
 
 // Mock envs if needed or let it use defaults (dotenv might not be loaded in test if not setup)
 jest.mock('../../helpers/envs', () => ({
-    envs: { BCRYPT_SALT_ROUNDS: 10, JWT_SECRET: 'secret', NODE_ENV: 'test' },
+    envs: {
+        BCRYPT_SALT_ROUNDS: 10,
+        JWT_SECRET: 'secret',
+        NODE_ENV: 'test',
+        FRONT_URL: 'http://localhost:3000',
+        API_URL: 'http://localhost:4000'
+    },
 }));
 
 describe('UsersController', () => {

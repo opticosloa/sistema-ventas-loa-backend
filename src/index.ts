@@ -19,6 +19,8 @@ app.use(cors({
       'http://localhost:5173',
       'https://sistema-ventas-loa.vercel.app',
       'https://sistema-ventas-8u59txz1r-loas-projects-af7a680f.vercel.app',
+      'https://sistemaloa.com',
+      'https://www.sistemaloa.com',
     ];
 
     // permitir requests sin origin (Postman, cron, webhooks)

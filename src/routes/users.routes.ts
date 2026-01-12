@@ -15,6 +15,8 @@ router.post("/", controller.createUser.bind(controller));
 router.get('/', controller.getUsers.bind(controller));
 router.post('/change-password', controller.changePassword.bind(controller));
 router.post('/rol', controller.handlerRol.bind(controller));
+router.put('/:id/pin', controller.updatePin.bind(controller));
+router.put('/:id/profile', controller.updateProfile.bind(controller));
 router.get('/:id', controller.getUserById.bind(controller));
 router.put('/:id', controller.updateUser.bind(controller));
 router.delete('/:id', controller.deleteUser.bind(controller));
