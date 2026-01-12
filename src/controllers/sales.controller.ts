@@ -26,7 +26,8 @@ export class SalesController {
         }
 
         // Validate UUIDs
-        if (!cliente_id || cliente_id === "") {
+        if (cliente_id === "") cliente_id = null;
+        if (!cliente_id) {
             return res.status(400).json({ success: false, error: 'cliente_id requerido' });
         }
 
@@ -41,7 +42,8 @@ export class SalesController {
 
             // SP returns json_build_object
             // result[0] might be { sp_venta_crear: { venta_id: 123, ... } }
-            const ventaData = result[0]?.sp_venta_crear || result[0];
+
+            const ventaData = result.rows?.[0]?.sp_venta_crear || result.rows?.[0] || {};
             const venta_id = ventaData?.venta_id;
 
             if (!venta_id) {
@@ -59,9 +61,18 @@ export class SalesController {
                 }
             }
 
-            res.json({ success: true, venta_id });
-        } catch (error) {
-            console.log(error);
+            // Verificar Total Confirmado
+            const totalResult = await PostgresDB.getInstance().callStoredProcedure('sp_venta_get_by_id', [venta_id]);
+            const total_confirmado = totalResult.rows?.[0]?.total || 0;
+
+            res.json({
+                success: true,
+                venta_id,
+                total_confirmado
+            });
+        } catch (error: any) {
+            console.error("❌ SALES ERROR:", error.message);
+            if (error.detail) console.error("👉 DETAIL:", error.detail);
             res.status(500).json({ success: false, error });
         }
     }

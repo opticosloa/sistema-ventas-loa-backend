@@ -211,8 +211,19 @@ export class PrescriptionController {
 
         console.log("Venta ID recuperado:", venta_id);
 
-        if (items && Array.isArray(items) && venta_id) {
-          for (const item of items) {
+        let itemsToInsert = items;
+        if (typeof itemsToInsert === 'string') {
+          try {
+            itemsToInsert = JSON.parse(itemsToInsert);
+          } catch (error) {
+            console.error("Error parsing items:", error);
+            itemsToInsert = [];
+          }
+        }
+
+        if (itemsToInsert && Array.isArray(itemsToInsert) && venta_id) {
+          for (const item of itemsToInsert) {
+            console.log("insertando item:", item.producto_id, "precio:", item.precio_unitario);
             await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_agregar', [
               venta_id,
               item.producto_id,
@@ -222,11 +233,18 @@ export class PrescriptionController {
           }
         }
 
+        // 5. Verificar Total
+        const totalResult = await PostgresDB.getInstance().callStoredProcedure('sp_venta_get_by_id', [venta_id]);
+        const total_confirmado = totalResult.rows[0]?.total || 0;
+
         return res.json({
           success: true,
           prescripcion_id,
-          venta_id
+          venta_id,
+          total_confirmado
         });
+
+
       }
 
       res.json({
