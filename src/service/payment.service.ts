@@ -40,6 +40,9 @@ export class PaymentService {
         const rows = result.rows || result;
         const pago_id = rows[0]?.pago_id || rows[0]?.sp_pago_crear;
 
+        if (!rows || rows.length === 0) {
+            throw new Error("SP sp_pago_crear no devolvió filas");
+        }
         if (!pago_id) {
             throw new Error('Failed to create payment record');
         }
@@ -287,8 +290,23 @@ export class PaymentService {
             throw new Error(`Error creating In-Store Order: ${response.status} ${response.statusText} - ${errorText}`);
         }
 
-        const data: any = await response.json();
-        const qr_data = data.qr_data; // This is what the frontend needs to render the QR
+        let data: any = null;
+        const text = await response.text();
+
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (e) {
+            console.error("MP devolvió JSON inválido:", text);
+            throw new Error("Respuesta inválida de Mercado Pago");
+        }
+
+        const qr_data = data.qr_data;
+
+        if (!qr_data) {
+            console.error("Respuesta MP sin qr_data:", data);
+            throw new Error("Mercado Pago no devolvió QR");
+        }
+
 
         return { qr_data, pago_id };
     }
