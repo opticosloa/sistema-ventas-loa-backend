@@ -430,10 +430,12 @@ export class PaymentService {
             console.log(`Procesando Webhook MP: Type=${type}, ID=${resourceId}, Status=${mp_status}, Ref=${external_reference}`);
 
 
+            const id_para_buscar = external_reference || final_preference_id;
+
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_status', [
-                final_preference_id || null,  // p_preference_id
-                mp_status,                    // p_status
-                resourceId                    // p_merchant_order_id
+                id_para_buscar,    // Enviamos el UUID (pago_id)
+                mp_status,
+                resourceId
             ]);
 
             // Check if updated
