@@ -154,17 +154,12 @@ export class ProductsController {
         }
     }
 
-    // Dentro de la clase ProductsController...
-
     public async getProductsByTipo(req: Request, res: Response) {
-        const { tipo } = req.params; // Viene de la URL /api/products/type/CRISTAL
+        const { tipo } = req.params;
 
         try {
-            if (!tipo) return res.status(400).json({ success: false, error: 'Tipo es obligatorio' });
-
-            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_get_by_tipo', [tipo.toUpperCase()]
+            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_get_by_tipo', [tipo]
             );
-
             res.json({
                 success: true,
                 result: result.rows
