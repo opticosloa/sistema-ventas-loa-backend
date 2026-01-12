@@ -67,7 +67,7 @@ export class PrescriptionController {
       observaciones,
       image_url,
       obraSocial,
-      descuento // Extract discount
+      descuento
     } = req.body;
 
     try {
@@ -115,6 +115,7 @@ export class PrescriptionController {
 
       // 2. Resolver Doctor (si viene matricula y no doctor_id)
       let finalDoctorId = doctor_id;
+      if (finalDoctorId === "") finalDoctorId = null;
       if (!finalDoctorId && matricula) {
         const doctorResult = await PostgresDB.getInstance().callStoredProcedure('sp_doctor_get_by_matricula', [matricula]);
         if (doctorResult.rows.length > 0) {
@@ -145,9 +146,9 @@ export class PrescriptionController {
           finalClienteId,
           finalDoctorId,
           fecha ? fecha.toString().split('T')[0] : null,
-          JSON.stringify(lejos || {}),
-          JSON.stringify(cerca || {}),
-          JSON.stringify(multifocal || {}),
+          lejos || {},
+          cerca || {},
+          multifocal || {},
           observaciones,
           image_url,
           obraSocial || null
@@ -158,17 +159,24 @@ export class PrescriptionController {
       // 3b. Descontar Stock de Cristales (Async)
       const crystalCtrl = CrystalsController.getInstance();
 
+      const hasValue = (v: any) => v !== null && v !== undefined && v !== '';
+
       const deductEye = async (section: any, ojoKey: 'OD' | 'OI') => {
-        if (section && section[ojoKey] && section[ojoKey].esfera && section[ojoKey].cilindro) {
+        if (
+          section &&
+          section[ojoKey] &&
+          hasValue(section[ojoKey].esfera) &&
+          hasValue(section[ojoKey].cilindro)
+        ) {
           const esf = section[ojoKey].esfera;
           const cil = section[ojoKey].cilindro;
           const mat = section.tipo || '';
           const trat = section.color || 'Blanco';
 
-          // Try deduct
           await crystalCtrl.deductStock(esf, cil, mat, trat, 1);
         }
       };
+
 
       // Lejos
       if (lejos) {
