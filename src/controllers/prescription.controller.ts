@@ -2,8 +2,6 @@ import { Request, Response } from "express";
 import { PostgresDB } from "../database/postgres";
 import fs from "fs";
 import sharp from "sharp";
-import { Prescription } from "../types/prescription";
-import { PrescriptionValidator } from "../helpers/prescriptionValidator";
 import { cloudinaryUploader } from "../helpers/cloudinaryUploader";
 import { CrystalsController } from "./crystals.controller";
 
@@ -67,7 +65,8 @@ export class PrescriptionController {
       observaciones,
       image_url,
       obraSocial,
-      descuento
+      descuento,
+      items
     } = req.body;
 
     try {
@@ -206,8 +205,22 @@ export class PrescriptionController {
         ]);
 
         // Extract ID securely
-        const ventaData = ventaResult[0]?.sp_venta_crear || ventaResult[0] || {};
+        // Accedemos a .rows porque el wrapper devuelve un objeto Result, no un array directo
+        const ventaData = ventaResult.rows?.[0]?.sp_venta_crear || ventaResult.rows?.[0] || {};
         const venta_id = ventaData.venta_id;
+
+        console.log("Venta ID recuperado:", venta_id);
+
+        if (items && Array.isArray(items) && venta_id) {
+          for (const item of items) {
+            await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_agregar', [
+              venta_id,
+              item.producto_id,
+              item.cantidad,
+              item.precio_unitario
+            ]);
+          }
+        }
 
         return res.json({
           success: true,

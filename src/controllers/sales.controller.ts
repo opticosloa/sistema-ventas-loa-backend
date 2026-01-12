@@ -16,7 +16,7 @@ export class SalesController {
     }
 
     public async createSale(req: Request, res: Response) {
-        let { cliente_id, urgente, descuento } = req.body;
+        let { cliente_id, urgente, descuento, items } = req.body;
         const vendedor_id = req.user?.id;
         const sucursal_id = req.user?.sucursal_id;
 
@@ -46,6 +46,17 @@ export class SalesController {
 
             if (!venta_id) {
                 throw new Error("No se pudo obtener el ID de la venta creada");
+            }
+
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_agregar', [
+                        venta_id,
+                        item.producto_id,
+                        item.cantidad,
+                        item.precio_unitario
+                    ]);
+                }
             }
 
             res.json({ success: true, venta_id });
