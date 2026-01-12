@@ -144,7 +144,7 @@ export class PrescriptionController {
         .callStoredProcedure('sp_prescripcion_crear', [
           finalClienteId,
           finalDoctorId,
-          fecha ? fecha.split('T')[0] : null,
+          fecha ? fecha.toString().split('T')[0] : null,
           JSON.stringify(lejos || {}),
           JSON.stringify(cerca || {}),
           JSON.stringify(multifocal || {}),
@@ -214,8 +214,10 @@ export class PrescriptionController {
       });
 
     } catch (error: any) {
-      console.error("ERROR EN CREATE_PRESCRIPTION:", error.message, error.stack);
-      res.status(500).json({ success: false, error });
+      console.error("DB ERROR:", error.message);
+      if (error.detail) console.error("👉 DETAIL:", error.detail);
+      if (error.hint) console.error("💡 HINT:", error.hint);
+      res.status(500).json({ success: false, error: error.message, detail: error.detail });
     }
   }
 
