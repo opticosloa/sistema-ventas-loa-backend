@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { CurrencyController } from '../controllers/currencyController';
 import { authMiddleware } from '../middlewares/auth.middleware';
+import { CurrencyController } from '../controllers';
 
 const router = Router();
 const controller = CurrencyController.getInstance();
