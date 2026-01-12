@@ -102,11 +102,15 @@ export class PaymentService {
 
     private async _getOrCreatePOS(): Promise<string> {
         // 1. Determine Fixed External ID
-        const targetExternalId = envs.MP_EXTERNAL_POS_ID || 'LOA_GENERAL_POS';
+        const rawId = envs.MP_EXTERNAL_POS_ID || 'LOAGENERALPOS';
+        const targetExternalId = rawId.replace(/[^a-zA-Z0-9]/g, '');
+
         const headers = {
             'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
         };
+
+        console.log(`🔍 Buscando POS con ID Limpio: ${targetExternalId}`);
 
         // 2. Search First (Idempotency)
         try {
