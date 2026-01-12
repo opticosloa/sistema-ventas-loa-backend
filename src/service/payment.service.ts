@@ -102,8 +102,7 @@ export class PaymentService {
 
     private async _getOrCreatePOS(): Promise<string> {
         // 1. Determine Fixed External ID
-        const rawId = envs.MP_EXTERNAL_POS_ID || 'LOAGENERALPOS';
-        const targetExternalId = rawId.replace(/[^a-zA-Z0-9]/g, '');
+        const targetExternalId = (envs.MP_EXTERNAL_POS_ID || 'CAJALUJAN01').replace(/[^a-zA-Z0-9]/g, '');
 
         const headers = {
             'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
@@ -181,7 +180,6 @@ export class PaymentService {
             name: "Caja Principal LOA",
             fixed_amount: true,
             store_id: Number(storeId),
-            external_store_id: "STORE_LOA_MAIN",
             external_id: targetExternalId,
             category: 621102 // Retail
         };
@@ -222,9 +220,9 @@ export class PaymentService {
                 throw new Error(`MP API Error: ${response.status} - ${errorTxt}`);
             }
 
-            // La respuesta suele tener formato { "results": [ { "id": "...", "name": "..." }, ... ] }
             const data = await response.json();
-            const devices = data.results || data.items || []; // Fallback por si cambia la estructura
+            console.log("📱 Dispositivos encontrados en crudo:", JSON.stringify(data));
+            const devices = data.data?.terminals || [];
             console.log(`✅ ${devices.length} dispositivos encontrados.`);
             return devices;
         } catch (error) {

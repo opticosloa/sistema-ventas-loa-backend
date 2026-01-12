@@ -288,4 +288,35 @@ export class SalesController {
             res.status(500).json({ success: false, error });
         }
     }
+
+    public async updateObservation(req: Request, res: Response) {
+        const { id } = req.params;
+        const { observation } = req.body;
+
+        if (!observation) {
+            return res.status(400).json({ success: false, error: 'La observación no puede estar vacía' });
+        }
+
+        try {
+            // Llamamos al Stored Procedure
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_agregar_observacion', [
+                id,
+                observation
+            ]);
+
+            // Verificamos si la venta existía
+            if (!result.rows || result.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Venta no encontrada' });
+            }
+
+            res.json({
+                success: true,
+                result: result.rows[0] // Retorna las observaciones actualizadas
+            });
+
+        } catch (error: any) {
+            console.error("Error en updateObservation (SP):", error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
 }

@@ -17,6 +17,7 @@ router.get('/:id/estado-pago', authMiddleware, controller.getEstadoPago.bind(con
 router.post('/:id/intentar-cierre', authMiddleware, controller.intentarCierre.bind(controller));
 router.post('/:id/entregar', authMiddleware, controller.entregarVenta.bind(controller));
 router.put('/:id/cancel', controller.cancelSale.bind(controller));
+router.put('/:id/observation', authMiddleware, controller.updateObservation.bind(controller));
 router.put('/:id/budget', authMiddleware, controller.markAsBudget.bind(controller));
 router.post('/returns', authMiddleware, controller.createReturn.bind(controller));
 
