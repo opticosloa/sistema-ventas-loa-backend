@@ -240,41 +240,43 @@ export class PaymentService {
         const method = PaymentMethod.MP;
         const pago_id = await this._createPaymentInDB(venta_id, method, monto);
 
-        // Fetch user me to ensure correct Collector ID
+        // 1. Obtener User ID dinámico
         const meRes = await fetch('https://api.mercadopago.com/users/me', {
             headers: { 'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}` }
         });
         if (!meRes.ok) throw new Error("Could not fetch MP User ID");
         const meData: any = await meRes.json();
-        const userId = meData.id; // Use dynamic ID
+        const userId = meData.id;
 
-        // const externalPosId = envs.MP_EXTERNAL_POS_ID; 
+        // 2. Obtener/Validar POS
         const externalPosId = await this._getOrCreatePOS();
         const accessToken = envs.MP_ACCESS_TOKEN;
 
         const url = `https://api.mercadopago.com/instore/qr/seller/collectors/${userId}/pos/${externalPosId}/orders`;
 
+        // 3. Payload Limpio y Validado
+        const totalAmount = parseFloat(Number(monto).toFixed(2)); // Aseguramos 2 decimales máx.
+
         const payload = {
-            external_reference: pago_id,
-            title: title || 'Venta',
-            total_amount: Number(monto),
-            description: title,
+            external_reference: pago_id.toString(),
+            title: title.substring(0, 25), // MP tiene límites de caracteres
+            total_amount: totalAmount,
+            description: "Venta de productos ópticos",
             items: [
                 {
-                    sku_number: "ITEM-1",
-                    category: "marketplace",
-                    title: title,
-                    description: title,
-                    unit_price: Number(monto),
+                    sku_number: "V-" + venta_id.toString().slice(0, 8),
+                    category: "others", // 'others' es más genérico y falla menos que 'marketplace'
+                    title: title.substring(0, 25),
+                    unit_price: totalAmount,
                     quantity: 1,
                     unit_measure: "unit",
-                    total_amount: Number(monto)
+                    total_amount: totalAmount
                 }
             ],
-            // notification_url is set at the POS/Application level usually, but we can try to send it if API allows, 
-            // though In-Store QR usually relies on the configured Webhook for the User/Application.
             notification_url: `${envs.API_URL}/api/payments/mercadopago/webhook`
         };
+
+        console.log("📡 Enviando orden a MP:", JSON.stringify(payload));
 
         const response = await fetch(url, {
             method: 'PUT',
@@ -285,28 +287,28 @@ export class PaymentService {
             body: JSON.stringify(payload)
         });
 
+        const text = await response.text();
+        console.log("📥 Respuesta cruda de MP:", text);
+
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Error creating In-Store Order: ${response.status} ${response.statusText} - ${errorText}`);
+            throw new Error(`Error MP (${response.status}): ${text}`);
         }
 
-        let data: any = null;
-        const text = await response.text();
-
+        let data: any = {};
         try {
             data = text ? JSON.parse(text) : {};
         } catch (e) {
-            console.error("MP devolvió JSON inválido:", text);
-            throw new Error("Respuesta inválida de Mercado Pago");
+            throw new Error("Respuesta de Mercado Pago no es un JSON válido");
         }
 
-        const qr_data = data.qr_data;
+        // A veces MP devuelve el QR en diferentes campos según la versión de la API
+        const qr_data = data.qr_data || data.qr_code || data.pago_id;
 
         if (!qr_data) {
-            console.error("Respuesta MP sin qr_data:", data);
-            throw new Error("Mercado Pago no devolvió QR");
+            // LOG CRÍTICO para ver qué devolvió realmente
+            console.error("MP NO DEVOLVIÓ QR. Respuesta completa:", data);
+            throw new Error(`Mercado Pago no generó el QR. Status: ${response.status}`);
         }
-
 
         return { qr_data, pago_id };
     }
