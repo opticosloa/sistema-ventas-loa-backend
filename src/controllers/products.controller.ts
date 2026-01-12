@@ -136,11 +136,42 @@ export class ProductsController {
     public async getProductById(req: Request, res: Response) {
         const { id } = req.params;
         try {
-            const result: any = await PostgresDB.getInstance().executeQuery('SELECT * FROM productos WHERE producto_id = $1', [id]);
+            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_get_by_id', [id]);
             if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Producto no encontrado' });
             res.json({ success: true, result: result.rows[0] });
         } catch (error) {
             res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async productsSearch(req: Request, res: Response) {
+        const { search } = req.params;
+        try {
+            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_buscar', [search]);
+            res.json({ success: true, result: result.rows });
+        } catch (error) {
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    // Dentro de la clase ProductsController...
+
+    public async getProductsByTipo(req: Request, res: Response) {
+        const { tipo } = req.params; // Viene de la URL /api/products/type/CRISTAL
+
+        try {
+            if (!tipo) return res.status(400).json({ success: false, error: 'Tipo es obligatorio' });
+
+            const result: any = await PostgresDB.getInstance().executeQuery('sp_producto_get_by_tipo', [tipo.toUpperCase()]
+            );
+
+            res.json({
+                success: true,
+                result: result.rows
+            });
+        } catch (error) {
+            console.error("Error en getProductsByTipo:", error);
+            res.status(500).json({ success: false, error: 'Error al filtrar productos por tipo' });
         }
     }
 }
