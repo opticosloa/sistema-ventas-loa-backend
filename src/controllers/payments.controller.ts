@@ -89,13 +89,28 @@ export class PaymentsController {
     }
 
     public async createManualPayment(req: Request, res: Response) {
-        const { venta_id, metodo, monto } = req.body;
+        const { venta_id, pagos } = req.body; // Extraemos el array 'pagos'
+
         try {
-            const result = await PaymentService.getInstance().createManualPayment(venta_id, metodo, monto);
-            res.json(result);
-        } catch (error) {
+            if (!pagos || !Array.isArray(pagos)) {
+                return res.status(400).json({ success: false, error: "Array de pagos requerido" });
+            }
+
+            const resultados = [];
+            for (const p of pagos) {
+                // Llamamos al servicio por cada pago del array
+                const resPago = await PaymentService.getInstance().createManualPayment(
+                    venta_id,
+                    p.metodo,
+                    p.monto
+                );
+                resultados.push(resPago);
+            }
+
+            res.json({ success: true, result: resultados });
+        } catch (error: any) {
             console.log(error);
-            res.status(500).json({ success: false, error: (error as Error).message });
+            res.status(500).json({ success: false, error: error.message });
         }
     }
 
@@ -107,6 +122,15 @@ export class PaymentsController {
         } catch (error) {
             console.log(error);
             res.status(500).json({ success: false, error: (error as Error).message });
+        }
+    }
+    public async getPointDevices(req: Request, res: Response) {
+        try {
+            const result = await PaymentService.getInstance().getPointDevices();
+            res.json({ success: true, result });
+        } catch (error: any) {
+            console.log(error);
+            res.status(500).json({ success: false, error: error.message });
         }
     }
 }

@@ -19,6 +19,9 @@ router.post('/mercadopago/qr', controller.createInStoreQr.bind(controller));
 // POST /api/payments/mercadopago/point
 router.post('/mercadopago/point', controller.createPointPayment.bind(controller));
 
+// GET /api/payments/mercadopago/devices
+router.get('/mercadopago/devices', controller.getPointDevices.bind(controller));
+
 // POST /api/payments/manual
 router.post('/manual', controller.createManualPayment.bind(controller));
 

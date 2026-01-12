@@ -25,6 +25,9 @@ export class PaymentService {
      * Reused by all payment creation methods.
      */
     private async _createPaymentInDB(venta_id: string, metodo: string, monto: number): Promise<string> {
+        // Log de seguridad
+        console.log("💰 Registrando pago en DB:", { venta_id, metodo, monto });
+
         // sp_pago_crear(venta_id, metodo, monto, estado?)
         // Assuming SP handles the 'null' as default/pending status.
         const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_crear', [
@@ -176,11 +179,47 @@ export class PaymentService {
         return externalId;
     }
 
+    public async getPointDevices() {
+        try {
+            console.log("📡 Consultando dispositivos Point a MP...");
+            const response = await fetch('https://api.mercadopago.com/terminals/v1/list', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorTxt = await response.text();
+                throw new Error(`MP API Error: ${response.status} - ${errorTxt}`);
+            }
+
+            // La respuesta suele tener formato { "results": [ { "id": "...", "name": "..." }, ... ] }
+            const data = await response.json();
+            const devices = data.results || data.items || []; // Fallback por si cambia la estructura
+            console.log(`✅ ${devices.length} dispositivos encontrados.`);
+            return devices;
+        } catch (error) {
+            console.error("Error en getPointDevices:", error);
+            // Devolvemos array vacío en caso de error para no romper el front, pero loggeamos.
+            // Opcional: lanzar error si prefieres manejarlo en el controlador.
+            throw error;
+        }
+    }
+
     public async createInStoreOrder(venta_id: string, monto: number, title: string = 'Venta óptica') {
         const method = PaymentMethod.MP;
         const pago_id = await this._createPaymentInDB(venta_id, method, monto);
 
-        const userId = envs.MP_USER_ID;
+        // Fetch user me to ensure correct Collector ID
+        const meRes = await fetch('https://api.mercadopago.com/users/me', {
+            headers: { 'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}` }
+        });
+        if (!meRes.ok) throw new Error("Could not fetch MP User ID");
+        const meData: any = await meRes.json();
+        const userId = meData.id; // Use dynamic ID
+
         // const externalPosId = envs.MP_EXTERNAL_POS_ID; 
         const externalPosId = await this._getOrCreatePOS();
         const accessToken = envs.MP_ACCESS_TOKEN;
