@@ -129,12 +129,24 @@ export class PaymentsController {
             res.status(500).json({ success: false, error: (error as Error).message });
         }
     }
+
     public async getPointDevices(req: Request, res: Response) {
         try {
             const result = await PaymentService.getInstance().getPointDevices();
             res.json({ success: true, result });
         } catch (error: any) {
             console.log(error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
+
+    public async createDynamicQR(req: Request, res: Response) {
+        const { total, sucursal_id } = req.body;
+        try {
+            const result = await PaymentService.getInstance().createDynamicQR(total, sucursal_id);
+            res.json({ success: true, result });
+        } catch (error: any) {
+            console.log('ERROR: creando QR dinamico: ', error);
             res.status(500).json({ success: false, error: error.message });
         }
     }

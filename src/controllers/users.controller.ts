@@ -18,20 +18,11 @@ export class UsersController {
     }
 
     private getCookieOptions() {
-        let domain: string | undefined;
-        try {
-            const url = new URL(envs.FRONT_URL);
-            domain = url.hostname;
-        } catch (e) {
-            console.warn('Invalid FRONT_URL for cookie domain:', envs.FRONT_URL);
-        }
-
         return {
             httpOnly: true,
             secure: true,
             sameSite: 'none' as const,
             maxAge: 16 * 60 * 60 * 1000, // 16 hours
-            domain: domain
         };
     }
 
@@ -327,13 +318,14 @@ export class UsersController {
     }
 
     public async updateProfile(req: Request, res: Response) {
-        const { id } = req.params;
+        const { email } = req.params;
         const { nombre, apellido, telefono, direccion, fecha_nacimiento } = req.body;
 
         try {
-            // 1. Obtener datos actuales
-            const userResult = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_id', [id]);
-
+            if (!email || email === 'undefined') {
+                return res.status(400).json({ success: false, error: 'Email no válido' });
+            }
+            const userResult = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_email', [email]);
             if (!userResult.rows || userResult.rows.length === 0) {
                 return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
             }
@@ -343,7 +335,7 @@ export class UsersController {
             // 2. Ejecutar la edición 
             // Nota: Asegúrate de que el orden de los parámetros coincida con tu SP SQL
             await PostgresDB.getInstance().callStoredProcedure('sp_usuario_editar', [
-                id,
+                currentUser.usuario_id,
                 nombre || currentUser.nombre,
                 apellido || currentUser.apellido,
                 currentUser.email,
@@ -364,6 +356,26 @@ export class UsersController {
             res.status(500).json({
                 success: false,
                 error: error.message || 'Error interno al actualizar perfil'
+            });
+        }
+    }
+
+    public async getUserByEmail(req: Request, res: Response) {
+        const { email } = req.params;
+        try {
+            if (!email || email === 'undefined') {
+                return res.status(400).json({ success: false, error: 'Email no válido' });
+            }
+            const userResult = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_email', [email]);
+            if (!userResult.rows || userResult.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+            }
+            res.json({ success: true, result: userResult.rows[0] });
+        } catch (error: any) {
+            console.error('Error getting user by email:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Error interno al obtener usuario'
             });
         }
     }

@@ -2,6 +2,7 @@ import { PostgresDB } from '../database/postgres';
 import { Payment, PaymentMethod } from '../types/payments';
 import { MercadoPagoConfig, Preference, Payment as MPPayment } from 'mercadopago';
 import { envs } from '../helpers/envs';
+import { randomUUID } from 'crypto';
 
 // Configure Mercado Pago v2
 const client = new MercadoPagoConfig({
@@ -292,12 +293,12 @@ export class PaymentService {
         });
 
         if (response.status === 204) {
-            console.log("✅ MP respondió 204 No Content (Orden creada, QR ya visible en POS o Pantalla)");
+            console.log("MP respondió 204 No Content (Orden creada, QR ya visible en POS o Pantalla)");
             return { qr_data: null, pago_id, status: 'no_content' };
         }
 
         const text = await response.text();
-        console.log("📥 Respuesta cruda de MP:", text);
+        console.log("Respuesta cruda de MP:", text);
 
         if (!response.ok) {
             throw new Error(`Error MP (${response.status}): ${text}`);
@@ -500,4 +501,88 @@ export class PaymentService {
             pagos: pagos
         };
     }
+
+    public async createDynamicQR(total: number, sucursal_id: string) {
+        try {
+            //* TODO: HACER QUE LAS CREDENCIALES SEAN DINAMICAS PARA CADA SUCURSAL
+            // 1. Obtener credenciales (DB)
+            // const credenciales = await this.getSucursalCredentials(sucursal_id);
+
+            const external_pos_id = envs.MP_EXTERNAL_POS_ID;
+            const access_token = envs.MP_ACCESS_TOKEN;
+
+            // 2. Generar referencias usando crypto nativo
+            const external_reference = `ORD-${randomUUID()}`;
+            const idempotencyKey = randomUUID();
+
+            // 3. Payload (Igual que antes)
+            const orderPayload = {
+                external_reference: external_reference,
+                title: "Compra en Tienda",
+                description: `Venta en sucursal ${sucursal_id}`,
+                notification_url: "https://api.sistemaloa.com/api/payments/mercadopago/webhook",
+                total_amount: total.toString(),
+                items: [
+                    {
+                        title: "Consumo General",
+                        unit_price: Number(total),
+                        quantity: 1,
+                        unit_measure: "unit",
+                        total_amount: Number(total)
+                    }
+                ],
+                config: {
+                    qr: {
+                        mode: "dynamic",
+                        external_pos_id: external_pos_id
+                    }
+                }
+            };
+
+            // 4. Usando FETCH nativo
+            const response = await fetch('https://api.mercadopago.com/v1/orders', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${access_token}`,
+                    'Content-Type': 'application/json',
+                    'X-Idempotency-Key': idempotencyKey
+                },
+                body: JSON.stringify(orderPayload)
+            });
+
+            // 5. Manejo de errores con fetch (fetch no lanza error en 400/500, hay que verificar .ok)
+            const data: any = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.message || `Error Mercado Pago: ${response.statusText}`);
+            }
+
+            const qrData = data.type_response?.qr_data;
+
+            if (!qrData) {
+                throw new Error("La respuesta de Mercado Pago no contiene qr_data");
+            }
+
+            return {
+                qr_data: qrData,
+                order_id: data.id,
+                external_reference: external_reference,
+                total: total
+            };
+
+        } catch (error: any) {
+            console.error('Service Error - createDynamicQR:', error);
+            throw new Error(error.message || 'Error al comunicarse con Mercado Pago');
+        }
+    }
+
+    // private async getSucursalCredentials(sucursal_id: string) {
+    //     // Tu lógica de DB aquí...
+    //     return {
+    //         access_token: "TEST-TU-ACCESS-TOKEN-REAL", 
+    //         external_pos_id: "SUCURSAL1_POS_TABLET"
+    //     };
+    // }
 }
+
+
