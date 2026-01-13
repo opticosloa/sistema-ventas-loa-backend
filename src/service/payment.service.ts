@@ -521,11 +521,25 @@ export class PaymentService {
             // 3. Payload (Igual que antes)
             const orderPayload = {
                 type: 'qr',
-                external_reference: external_reference,
-                title: "Compra en Tienda",
-                description: `Venta en sucursal ${sucursal_id}`,
-                notification_url: "https://api.sistemaloa.com/api/payments/mercadopago/webhook",
                 total_amount: safeTotalStr,
+                description: `Venta en sucursal ${sucursal_id}`,
+                external_reference: external_reference,
+                expiration_time: "PT10M",
+                title: "Compra en Tienda",
+                notification_url: "https://api.sistemaloa.com/api/payments/mercadopago/webhook",
+                config: {
+                    qr: {
+                        external_pos_id: external_pos_id,
+                        mode: "dynamic"
+                    }
+                },
+                transactions: {
+                    payments: [
+                        {
+                            amount: safeTotalStr
+                        }
+                    ]
+                },
                 items: [
                     {
                         title: "Consumo General",
@@ -534,13 +548,7 @@ export class PaymentService {
                         unit_measure: "unit",
                         total_amount: safeTotalNum
                     }
-                ],
-                config: {
-                    qr: {
-                        mode: "dynamic",
-                        external_pos_id: external_pos_id
-                    }
-                }
+                ]
             };
 
             // 4. Usando FETCH nativo
@@ -590,5 +598,3 @@ export class PaymentService {
     //     };
     // }
 }
-
-
