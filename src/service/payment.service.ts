@@ -518,31 +518,36 @@ export class PaymentService {
             const external_reference = `ORD-${randomUUID()}`;
             const idempotencyKey = randomUUID();
 
+            // 3. Payload CORREGIDO según el error de propiedades
             const orderPayload = {
-                type: "qr", // OBLIGATORIO
+                type: "qr",
                 external_reference: external_reference,
-                description: `Venta Sucursal ${venta_id}`,
+                description: `Venta Sucursal ${sucursal_id}`,
                 total_amount: safeTotalStr,
                 items: [
                     {
-                        sku_number: "GEN-001",
-                        category: "others",
                         title: "Consumo General",
-                        description: "Venta General",
                         unit_price: safeTotalStr,
                         quantity: 1,
-                        unit_measure: "unit",
-                        total_amount: safeTotalStr
+                        unit_measure: "unit"
                     }
                 ],
+                transactions: {
+                    payments: [
+                        {
+                            amount: safeTotalStr
+                        }
+                    ]
+                },
                 config: {
                     qr: {
-                        mode: "dynamic", //
+                        mode: "dynamic",
                         external_pos_id: external_pos_id
                     }
                 }
             };
 
+            console.log(orderPayload);
             // 4. Usando FETCH nativo
             const response = await fetch('https://api.mercadopago.com/v1/orders', {
                 method: 'POST',
@@ -553,6 +558,8 @@ export class PaymentService {
                 },
                 body: JSON.stringify(orderPayload)
             });
+
+            console.log(response);
 
             // 5. Manejo de errores con fetch (fetch no lanza error en 400/500, hay que verificar .ok)
             const data: any = await response.json();
