@@ -512,6 +512,8 @@ export class PaymentService {
             const external_pos_id = await this._getOrCreatePOS();
             const access_token = envs.MP_ACCESS_TOKEN;
 
+            const safeTotalStr = Number(total).toFixed(2);
+            const safeTotalNum = Number(safeTotalStr);
             // 2. Generar referencias usando crypto nativo
             const external_reference = `ORD-${randomUUID()}`;
             const idempotencyKey = randomUUID();
@@ -522,14 +524,14 @@ export class PaymentService {
                 title: "Compra en Tienda",
                 description: `Venta en sucursal ${sucursal_id}`,
                 notification_url: "https://api.sistemaloa.com/api/payments/mercadopago/webhook",
-                total_amount: total.toString(),
+                total_amount: safeTotalStr,
                 items: [
                     {
                         title: "Consumo General",
-                        unit_price: Number(total),
+                        unit_price: safeTotalNum,
                         quantity: 1,
                         unit_measure: "unit",
-                        total_amount: Number(total)
+                        total_amount: safeTotalNum
                     }
                 ],
                 config: {
@@ -555,7 +557,9 @@ export class PaymentService {
             const data: any = await response.json();
 
             if (!response.ok) {
-                throw new Error(data?.message || `Error Mercado Pago: ${response.statusText}`);
+                console.error('❌ ERROR DETALLADO DE MERCADO PAGO:', JSON.stringify(data, null, 2));
+                const errorMsg = data.message || data.error || 'Error desconocido de MP';
+                throw new Error(`Error Mercado Pago (${response.status}): ${errorMsg}`);
             }
 
             const qrData = data.type_response?.qr_data;
@@ -573,7 +577,7 @@ export class PaymentService {
 
         } catch (error: any) {
             console.error('Service Error - createDynamicQR:', error);
-            throw new Error(error.message || 'Error al comunicarse con Mercado Pago');
+            throw error;
         }
     }
 
