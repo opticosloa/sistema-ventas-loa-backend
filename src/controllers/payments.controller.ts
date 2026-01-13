@@ -141,9 +141,9 @@ export class PaymentsController {
     }
 
     public async createDynamicQR(req: Request, res: Response) {
-        const { total, sucursal_id } = req.body;
+        const { total, sucursal_id, venta_id } = req.body;
         try {
-            const result = await PaymentService.getInstance().createDynamicQR(total, sucursal_id);
+            const result = await PaymentService.getInstance().createDynamicQR(total, sucursal_id, venta_id);
             res.json({ success: true, result });
         } catch (error: any) {
             console.log('ERROR: creando QR dinamico: ', error);

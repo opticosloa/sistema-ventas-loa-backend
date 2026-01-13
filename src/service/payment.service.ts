@@ -503,7 +503,7 @@ export class PaymentService {
         };
     }
 
-    public async createDynamicQR(total: number, sucursal_id: string) {
+    public async createDynamicQR(total: number, sucursal_id: string, venta_id: string) {
         try {
             //* TODO: HACER QUE LAS CREDENCIALES SEAN DINAMICAS PARA CADA SUCURSAL
             // 1. Obtener credenciales (DB)
@@ -518,37 +518,29 @@ export class PaymentService {
             const external_reference = `ORD-${randomUUID()}`;
             const idempotencyKey = randomUUID();
 
-            // 3. Payload (Igual que antes)
             const orderPayload = {
-                type: 'qr',
-                total_amount: safeTotalStr,
-                description: `Venta en sucursal ${sucursal_id}`,
+                type: "qr", // OBLIGATORIO
                 external_reference: external_reference,
-                expiration_time: "PT10M",
-                title: "Compra en Tienda",
-                notification_url: "https://api.sistemaloa.com/api/payments/mercadopago/webhook",
-                config: {
-                    qr: {
-                        external_pos_id: external_pos_id,
-                        mode: "dynamic"
-                    }
-                },
-                transactions: {
-                    payments: [
-                        {
-                            amount: safeTotalStr
-                        }
-                    ]
-                },
+                description: `Venta Sucursal ${venta_id}`,
+                total_amount: safeTotalStr,
                 items: [
                     {
+                        sku_number: "GEN-001",
+                        category: "others",
                         title: "Consumo General",
-                        unit_price: safeTotalNum,
+                        description: "Venta General",
+                        unit_price: safeTotalStr,
                         quantity: 1,
                         unit_measure: "unit",
-                        total_amount: safeTotalNum
+                        total_amount: safeTotalStr
                     }
-                ]
+                ],
+                config: {
+                    qr: {
+                        mode: "dynamic", //
+                        external_pos_id: external_pos_id
+                    }
+                }
             };
 
             // 4. Usando FETCH nativo
@@ -598,3 +590,5 @@ export class PaymentService {
     //     };
     // }
 }
+
+
