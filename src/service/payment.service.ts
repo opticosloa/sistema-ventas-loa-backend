@@ -520,6 +520,7 @@ export class PaymentService {
 
             // 3. Payload (Igual que antes)
             const orderPayload = {
+                type: 'qr',
                 external_reference: external_reference,
                 title: "Compra en Tienda",
                 description: `Venta en sucursal ${sucursal_id}`,
