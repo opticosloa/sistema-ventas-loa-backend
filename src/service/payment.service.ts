@@ -11,6 +11,7 @@ const client = new MercadoPagoConfig({
 
 export class PaymentService {
     private static instance: PaymentService;
+    private posIdCache: Map<string, string> = new Map();
 
     private constructor() { }
 
@@ -508,7 +509,7 @@ export class PaymentService {
             // 1. Obtener credenciales (DB)
             // const credenciales = await this.getSucursalCredentials(sucursal_id);
 
-            const external_pos_id = envs.MP_EXTERNAL_POS_ID;
+            const external_pos_id = await this._getOrCreatePOS();
             const access_token = envs.MP_ACCESS_TOKEN;
 
             // 2. Generar referencias usando crypto nativo
