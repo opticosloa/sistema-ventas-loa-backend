@@ -353,7 +353,17 @@ export class PaymentService {
 
         if (!response.ok) {
             const txt = await response.text();
-            throw new Error(`Error creating Payment Intent: ${txt}`);
+            let errorData: any = {};
+            try { errorData = JSON.parse(txt); } catch (e) { }
+
+            // CASO ESPECÍFICO: TERMINAL OCUPADA (Error 409 / 2205)
+            if (response.status === 409) {
+                // Opción A: Intentar borrar la orden anterior automáticamente (Avanzado)
+                // Opción B: Avisar al usuario (Más seguro)
+                throw new Error("⚠️ La terminal está ocupada con una operación anterior. Por favor presione el botón ROJO (Cancelar) en el dispositivo e intente nuevamente.");
+            }
+
+            throw new Error(`Error Point: ${errorData.message || txt}`);
         }
 
         const data = await response.json();
@@ -394,8 +404,10 @@ export class PaymentService {
             else if (type === 'payment') {
                 const paymentClient = new MPPayment(client);
                 const paymentInfo = await paymentClient.get({ id: resourceId });
-                raw_status = paymentInfo.status || 'unknown'; // 'approved', 'rejected'
-                external_reference = paymentInfo.external_reference;
+
+                raw_status = paymentInfo.status || 'unknown';
+                external_reference = paymentInfo.external_reference ||
+                    paymentInfo.metadata?.external_reference;
 
                 const derived_preference_id = paymentInfo.order?.id ? String(paymentInfo.order.id) : undefined;
                 final_preference_id = final_preference_id || derived_preference_id;
