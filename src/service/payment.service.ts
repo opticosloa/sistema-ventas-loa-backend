@@ -401,6 +401,15 @@ export class PaymentService {
                 mp_status = paymentInfo.status || 'unknown';
                 external_reference = paymentInfo.external_reference;
 
+                if (mp_status === 'processed' || mp_status === 'closed' || mp_status === 'approved') {
+                    mp_status = 'APROBADO'; // <--- CAMBIO CLAVE
+                } else if (mp_status === 'rejected' || mp_status === 'cancelled') {
+                    mp_status = 'RECHAZADO';
+                } else {
+                    // Para cualquier otro estado intermedio
+                    mp_status = 'PENDIENTE';
+                }
+
                 console.log(`[Point Fix] Pago detectado. ID: ${resourceId}, Status: ${mp_status}, Ref: ${external_reference}`);
 
                 const derived_preference_id = paymentInfo.order?.id ? String(paymentInfo.order.id) : undefined;
