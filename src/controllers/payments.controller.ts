@@ -69,6 +69,7 @@ export class PaymentsController {
 
         const { type, action, data } = req.body;
 
+        console.log('DATA: ', data);
         // El ID puede venir en req.body.data.id (Webhooks) o req.query.id (IPN)
         const resourceId = data?.id || req.query.id || req.query['data.id'];
 
