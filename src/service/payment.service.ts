@@ -367,14 +367,13 @@ export class PaymentService {
     }
 
     public async handleMPWebhook(mp_preference_id: string | undefined, type: any, id: any, data: any) {
+        // 1. Filtro de eventos
         if (type !== 'payment' && type !== 'merchant_order' && type !== 'order') {
-            const topic = type || 'unknown';
-            console.log('Evento ignorado (no es payment ni merchant_order ni order):', topic);
+            console.log('Evento ignorado:', type);
             return;
         }
 
         const paymentId = id || data?.id;
-
         if (!paymentId) {
             console.warn('Webhook sin ID de pago');
             return;
@@ -383,107 +382,85 @@ export class PaymentService {
         const resourceId = String(paymentId);
 
         try {
-            // Consultar estado en Mercado Pago via API
-            let mp_status = 'unknown';
+            let raw_status = 'unknown'; // Aquí guardaremos el status crudo en INGLÉS
             let external_reference = null;
             let final_preference_id = mp_preference_id;
 
+            // --- A. Obtener Status CRUDO según el tipo ---
             if (type === 'order') {
-                mp_status = data.status; // 'processed', 'opened', etc.
+                raw_status = data.status; // 'processed', 'opened'
                 external_reference = data.external_reference;
-                console.log(`[Webhook Order] Status: ${mp_status}, Ref: ${external_reference}`);
-
-                // Mapeo de estados de QR Dinámico a estados de tu DB
-                if (mp_status === 'processed' || mp_status === 'closed') mp_status = 'approved';
-            } else if (type === 'payment') {
+            }
+            else if (type === 'payment') {
                 const paymentClient = new MPPayment(client);
                 const paymentInfo = await paymentClient.get({ id: resourceId });
-                mp_status = paymentInfo.status || 'unknown';
+                raw_status = paymentInfo.status || 'unknown'; // 'approved', 'rejected'
                 external_reference = paymentInfo.external_reference;
-
-                if (mp_status === 'processed' || mp_status === 'closed' || mp_status === 'approved') {
-                    mp_status = 'APROBADO'; // <--- CAMBIO CLAVE
-                } else if (mp_status === 'rejected' || mp_status === 'cancelled') {
-                    mp_status = 'RECHAZADO';
-                } else {
-                    // Para cualquier otro estado intermedio
-                    mp_status = 'PENDIENTE';
-                }
-
-                console.log(`[Point Fix] Pago detectado. ID: ${resourceId}, Status: ${mp_status}, Ref: ${external_reference}`);
 
                 const derived_preference_id = paymentInfo.order?.id ? String(paymentInfo.order.id) : undefined;
                 final_preference_id = final_preference_id || derived_preference_id;
-
-                console.log(`[Point Fix] Pago detectado. ID: ${resourceId}, Status: ${mp_status}, Ref: ${external_reference}`);
-            } else if (type === 'merchant_order') {
-                // Fetch Merchant Order
-                // client is MercadoPagoConfig
-                // We can use fetch with the same client's access token or a new MerchantOrder class if available.
-                // Doing raw fetch to be safe as SDK might change.
+            }
+            else if (type === 'merchant_order') {
                 const response = await fetch(`https://api.mercadopago.com/merchant_orders/${resourceId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`
-                    }
+                    headers: { 'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}` }
                 });
-
                 if (!response.ok) throw new Error('Failed to fetch merchant order');
                 const orderData = await response.json();
 
-                mp_status = orderData.status; // 'opened', 'closed' (paid)
+                raw_status = orderData.status; // 'closed', 'opened'
                 external_reference = orderData.external_reference;
                 final_preference_id = orderData.preference_id ? String(orderData.preference_id) : undefined;
-
-                // If closed/paid, we treat it as APPROVED equivalent for our system logic if we want to release stock etc.
-                // Mapped status: 
-                // opened -> PENDING
-                // closed -> PAGADA (if payments match total)
-                if (mp_status === 'closed') mp_status = 'approved';
-                if (mp_status === 'opened') mp_status = 'pending';
             }
 
-            // Log informativo
-            console.log(`Procesando Webhook MP: Type=${type}, ID=${resourceId}, Status=${mp_status}, Ref=${external_reference}`);
+            console.log(`[Webhook] Info Cruda: Type=${type}, Status=${raw_status}, Ref=${external_reference}`);
 
+            // --- B. Traducir a Estado de Base de Datos (UNA SOLA VEZ) ---
             let db_status = 'PENDIENTE';
 
-            if (mp_status === 'approved' || mp_status === 'closed') {
-                db_status = 'APROBADO';
-            } else if (mp_status === 'rejected' || mp_status === 'cancelled') {
-                db_status = 'RECHAZADO'; // <--- ESTO ES LO QUE FALTABA
-            } else if (mp_status === 'in_process' || mp_status === 'pending') {
-                db_status = 'PENDIENTE';
-            }
+            // Lista de estados que consideramos EXITOSOS
+            const successStatuses = ['approved', 'processed', 'closed', 'accredited'];
+            // Lista de estados que consideramos FALLIDOS
+            const failureStatuses = ['rejected', 'cancelled', 'cancelled_by_player'];
 
+            if (successStatuses.includes(raw_status)) {
+                db_status = 'APROBADO';
+            } else if (failureStatuses.includes(raw_status)) {
+                db_status = 'RECHAZADO';
+            }
+            // Si no es ninguno (ej: 'in_process', 'pending', 'opened'), se queda en 'PENDIENTE'
+
+            // --- C. Actualizar DB ---
             const id_para_buscar = external_reference || final_preference_id;
 
             if (!id_para_buscar) {
-                console.error(`[Webhook] No se pudo determinar un ID de búsqueda para el recurso ${resourceId}`);
+                console.error(`[Webhook] Sin ID de búsqueda para recurso ${resourceId}`);
                 return false;
             }
 
+            console.log(`[Webhook] Actualizando DB -> Ref: ${id_para_buscar}, Estado: ${db_status}`);
+
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_status', [
-                id_para_buscar,    // Enviamos el UUID (pago_id)
-                db_status,
+                id_para_buscar,
+                db_status, // Enviamos 'APROBADO' o 'RECHAZADO'
                 resourceId
             ]);
+
             const updated = result.rows?.[0]?.sp_pago_actualizar_status;
-            // Check if updated
+
             if (updated === false) {
-                console.warn(`[Webhook] Pago no encontrado en DB. ID buscado: ${id_para_buscar}. Respondiendo 404 para reintento.`);
+                console.warn(`[Webhook] Pago no encontrado (Ref: ${id_para_buscar})`);
                 return false;
             }
-            console.log(`[Webhook] DB Actualizada con éxito para pago ${id_para_buscar}`);
+
+            console.log(`✅ Pago actualizado correctamente a: ${db_status}`);
             return true;
+
         } catch (error: any) {
-            // ... (logging)
-            if (error?.status === 404 || error?.response?.status === 404) {
-                console.warn(`[MP Webhook] Recurso ${resourceId} no encontrado.`);
+            if (error?.status === 404) {
+                console.warn(`[Webhook] Recurso MP ${resourceId} no encontrado.`);
                 return;
             }
-            console.error('Error al consultar/actualizar MP:', error);
-            // Don't throw to avoid 500 to MP causing retries if it's just logic error? 
-            // Better to throw if transient.
+            console.error('Error Webhook:', error);
             throw error;
         }
     }
