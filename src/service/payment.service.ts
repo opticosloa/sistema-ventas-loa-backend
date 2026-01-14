@@ -436,6 +436,15 @@ export class PaymentService {
             // Log informativo
             console.log(`Procesando Webhook MP: Type=${type}, ID=${resourceId}, Status=${mp_status}, Ref=${external_reference}`);
 
+            let db_status = 'PENDIENTE';
+
+            if (mp_status === 'approved' || mp_status === 'closed') {
+                db_status = 'APROBADO';
+            } else if (mp_status === 'rejected' || mp_status === 'cancelled') {
+                db_status = 'RECHAZADO'; // <--- ESTO ES LO QUE FALTABA
+            } else if (mp_status === 'in_process' || mp_status === 'pending') {
+                db_status = 'PENDIENTE';
+            }
 
             const id_para_buscar = external_reference || final_preference_id;
 
@@ -446,7 +455,7 @@ export class PaymentService {
 
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_status', [
                 id_para_buscar,    // Enviamos el UUID (pago_id)
-                mp_status,
+                db_status,
                 resourceId
             ]);
             const updated = result.rows?.[0]?.sp_pago_actualizar_status;
