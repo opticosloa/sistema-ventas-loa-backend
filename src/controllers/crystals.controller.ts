@@ -13,6 +13,53 @@ export class CrystalsController {
         return CrystalsController.instance;
     }
 
+    public async createBatchCristales(req: Request, res: Response) {
+        try {
+            const {
+                material,
+                tratamiento,
+                esfera_min,
+                esfera_max,
+                cilindro_min,
+                cilindro_max,
+                precio_usd,
+                stock_inicial
+            } = req.body;
+
+            // Validación básica
+            if (!material || !tratamiento) {
+                return res.status(400).json({ error: 'Material y Tratamiento son obligatorios' });
+            }
+
+            // Llamada al SP sp_cristales_upsert_rango
+            // Nota: El orden de los parámetros debe coincidir EXACTAMENTE con el del SP SQL
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_cristales_upsert_rango', [
+                material,
+                tratamiento,
+                Number(esfera_min),
+                Number(esfera_max),
+                Number(cilindro_min),
+                Number(cilindro_max),
+                Number(precio_usd),
+                Number(stock_inicial || 0),
+                null // ubicacion (opcional, enviamos null por defecto)
+            ]);
+
+            // El SP devuelve un entero (v_contador)
+            const createdCount = result.rows?.[0]?.sp_cristales_upsert_rango;
+
+            return res.json({
+                success: true,
+                message: `Se procesaron ${createdCount} cristales correctamente.`,
+                count: createdCount
+            });
+
+        } catch (error) {
+            console.error("Error en createBatchCristales:", error);
+            return res.status(500).json({ error: 'Error interno procesando la matriz de cristales' });
+        }
+    }
+
     public async checkStock(req: Request, res: Response) {
         const { esfera, cilindro, material, tratamiento } = req.query;
 
@@ -98,38 +145,32 @@ export class CrystalsController {
             return false;
         }
     }
-    public async createCrystal(req: Request, res: Response) {
-        const { material, tratamiento, esfera, cilindro, stock, stock_minimo, ubicacion, precio_costo, precio_venta } = req.body;
+
+    // Endpoint para usar en el Punto de Venta (POS)
+    public async getPriceForSale(req: Request, res: Response) {
+        const { esfera, cilindro, material, tratamiento } = req.query;
+
+        if (!esfera || !cilindro) {
+            return res.status(400).json({ error: 'Esfera y Cilindro requeridos' });
+        }
 
         try {
-            // Basic validation
-            if (!material || !tratamiento || esfera === undefined || cilindro === undefined) {
-                return res.status(400).json({ success: false, message: "Missing required fields" });
-            }
-
-            // Check if exists? Unique constraint?
-            // Assuming (esfera, cilindro, material, tratamiento) is unique key.
-            // If exists, maybe update stock? Or error?
-            // "Batalla Naval" style implies uniqueness.
-            // Let's try insert, if error (conflict), return error.
-
-            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_crear', [
-                material,
-                tratamiento,
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_buscar_dinamico', [
                 Number(esfera),
                 Number(cilindro),
-                stock || 0,
-                stock_minimo || 0,
-                ubicacion,
-                precio_costo || 0,
-                precio_venta || 0
+                material ? String(material) : null,
+                tratamiento ? String(tratamiento) : null
             ]);
 
-            res.status(201).json({ success: true, result: result.rows[0] });
+            // Devolvemos el primer match con el precio ya calculado en pesos
+            return res.json({
+                success: true,
+                result: result.rows
+            });
 
-        } catch (error: any) {
-            console.error("❌ ERROR DETALLADO:", error.message, error.stack);
-            res.status(500).json({ success: false, error: error.message, detail: error.detail });
+        } catch (error) {
+            console.error("Error buscando precio dinámico:", error);
+            return res.status(500).json({ error: 'Error calculando precio' });
         }
     }
 }
