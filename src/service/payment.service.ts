@@ -437,7 +437,7 @@ export class PaymentService {
                 return false;
             }
 
-            console.log(`[Webhook] Actualizando DB -> Ref: ${id_para_buscar}, Estado: ${db_status}`);
+            console.log(`[Webhook] Actualizando DB -> Ref: ${id_para_buscar}, Estado: ${db_status}, resorceId: ${resourceId}`);
 
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_status', [
                 id_para_buscar,
