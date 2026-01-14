@@ -361,7 +361,7 @@ export class PaymentService {
            Response usually contains:
            { "id": "...", "status": "OPEN", "amount": 1500, ... }
         */
-
+        console.log(data);
         // Optionally, we could store the intent_id if needed, but external_reference links it back.
         return { success: true, intent_id: data.id, pago_id, status: data.status };
     }
@@ -407,7 +407,7 @@ export class PaymentService {
                 if (!response.ok) throw new Error('Failed to fetch merchant order');
                 const orderData = await response.json();
 
-                raw_status = orderData.status; // 'closed', 'opened'
+                raw_status = orderData.status;
                 external_reference = orderData.external_reference;
                 final_preference_id = orderData.preference_id ? String(orderData.preference_id) : undefined;
             }
