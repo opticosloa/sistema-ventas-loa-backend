@@ -406,8 +406,12 @@ export class PaymentService {
                 const paymentInfo = await paymentClient.get({ id: resourceId });
 
                 raw_status = paymentInfo.status || 'unknown';
+
+                const infoExtra = paymentInfo.additional_info as any;
+
                 external_reference = paymentInfo.external_reference ||
-                    paymentInfo.metadata?.external_reference;
+                    paymentInfo.metadata?.external_reference ||
+                    infoExtra?.external_reference;
 
                 const derived_preference_id = paymentInfo.order?.id ? String(paymentInfo.order.id) : undefined;
                 final_preference_id = final_preference_id || derived_preference_id;
