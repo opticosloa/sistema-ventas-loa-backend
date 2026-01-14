@@ -28,7 +28,7 @@ export class PaymentService {
      */
     private async _createPaymentInDB(venta_id: string, metodo: string, monto: number): Promise<string> {
         // Log de seguridad
-        console.log("💰 Registrando pago en DB:", { venta_id, metodo, monto });
+        console.log("Registrando pago en DB:", { venta_id, metodo, monto });
 
         // sp_pago_crear(venta_id, metodo, monto, estado?)
         // Assuming SP handles the 'null' as default/pending status.
@@ -367,9 +367,9 @@ export class PaymentService {
     }
 
     public async handleMPWebhook(mp_preference_id: string | undefined, type: any, id: any, data: any) {
-        if (type !== 'payment' && type !== 'merchant_order') {
+        if (type !== 'payment' && type !== 'merchant_order' && type !== 'order') {
             const topic = type || 'unknown';
-            console.log('Evento ignorado (no es payment ni merchant_order):', topic);
+            console.log('Evento ignorado (no es payment ni merchant_order ni order):', topic);
             return;
         }
 
@@ -388,7 +388,14 @@ export class PaymentService {
             let external_reference = null;
             let final_preference_id = mp_preference_id;
 
-            if (type === 'payment') {
+            if (type === 'order') {
+                mp_status = data.status; // 'processed', 'opened', etc.
+                external_reference = data.external_reference;
+                console.log(`[Webhook Order] Status: ${mp_status}, Ref: ${external_reference}`);
+
+                // Mapeo de estados de QR Dinámico a estados de tu DB
+                if (mp_status === 'processed' || mp_status === 'closed') mp_status = 'approved';
+            } else if (type === 'payment') {
                 const paymentClient = new MPPayment(client);
                 const paymentInfo = await paymentClient.get({ id: resourceId });
                 mp_status = paymentInfo.status || 'unknown';
@@ -513,9 +520,9 @@ export class PaymentService {
             const access_token = envs.MP_ACCESS_TOKEN;
 
             const safeTotalStr = Number(total).toFixed(2);
-            const safeTotalNum = Number(safeTotalStr);
+            const pago_id_db = await this._createPaymentInDB(venta_id, 'MP', Number(total));
             // 2. Generar referencias usando crypto nativo
-            const external_reference = `ORD-${randomUUID()}`;
+            const external_reference = String(pago_id_db);
             const idempotencyKey = randomUUID();
 
             // 3. Payload CORREGIDO según el error de propiedades
