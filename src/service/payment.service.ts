@@ -326,11 +326,8 @@ export class PaymentService {
 
     public async createPointPayment(venta_id: string, monto: number, device_id: string) {
         if (!device_id) throw new Error("Device ID is required for Point Payment");
-
-        const method = PaymentMethod.MP;
         // 1. Create local payment reference
-        // Note: For Point, we might need to handle status updates via webhook.
-        const pago_id = await this._createPaymentInDB(venta_id, method, monto);
+        const pago_id = await this._createPaymentInDB(venta_id, 'MP_POINT', monto);
 
         // 2. Create Payment Intent
         const url = `https://api.mercadopago.com/point/integration-api/devices/${device_id}/payment-intents`;
@@ -531,7 +528,7 @@ export class PaymentService {
             const access_token = envs.MP_ACCESS_TOKEN;
 
             const safeTotalStr = Number(total).toFixed(2);
-            const pago_id_db = await this._createPaymentInDB(venta_id, 'MP', Number(total));
+            const pago_id_db = await this._createPaymentInDB(venta_id, 'MP_QR', Number(total));
             // 2. Generar referencias usando crypto nativo
             const external_reference = String(pago_id_db);
             const idempotencyKey = randomUUID();
