@@ -71,17 +71,28 @@ export class PaymentsController {
 
         console.log('DATA: ', data);
         // El ID puede venir en req.body.data.id (Webhooks) o req.query.id (IPN)
-        const resourceId = data?.id || req.query.id || req.query['data.id'];
-
+        let resourceId = data?.id || req.query.id || req.query['data.id'];
         // El tipo de evento (payment, plan, merchant_order, etc)
-        const resourceType = type || action || req.query.topic;
-
+        let resourceType = type || action || req.query.topic;
         // El preference_id solo vendrá aquí si lo configuraste manualmente en la URL de notificación
         const mp_preference_id = req.query.preference_id as string;
 
+        if (!resourceType && req.body.intent_type && req.body.payment) {
+            console.log("📍 Webhook Point Detectado!");
+            resourceType = 'payment'; // Lo tratamos como un pago normal
+            resourceId = req.body.payment.id; // Sacamos el ID del objeto 'payment' interno
+        }
+
+        console.log(`Procesando como: Type=${resourceType}, ID=${resourceId}`);
+
         try {
             // Pasamos el resourceId para que el servicio busque los detalles en la API de MP
-            const found = await PaymentService.getInstance().handleMPWebhook(mp_preference_id, resourceType, resourceId, data);
+            const found = await PaymentService.getInstance().handleMPWebhook(
+                mp_preference_id,
+                resourceType,
+                resourceId,
+                data
+            );
 
             if (found === false) {
                 res.status(404).json({ error: 'Payment not found yet' });
