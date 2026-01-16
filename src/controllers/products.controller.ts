@@ -39,55 +39,89 @@ export class ProductsController {
 
     public async createProduct(req: Request, res: Response) {
         const {
-            nombre, descripcion, tipo, precio_costo, precio_venta, stock, stock_minimo, ubicacion, codigo_qr
-        }: Product = req.body;
-
-        if (!nombre || !tipo || !precio_venta) {
-            return res.status(400).json({ success: false, error: 'Campos obligatorios faltantes' });
-        }
+            nombre,
+            descripcion,
+            tipo,
+            marca_id,
+            precio_costo,
+            precio_usd,
+            iva,
+            stock,
+            stock_minimo,
+            ubicacion,
+            codigo_qr,
+            is_active
+        } = req.body;
 
         try {
-            // Generar QR si no viene
-            let finalQr = codigo_qr;
+            // 1. Validaciones básicas de negocio
+            if (!nombre || !tipo || precio_usd === undefined) {
+                return res.status(400).json({ success: false, error: 'Nombre, tipo y precio de venta son obligatorios' });
+            }
+            const nombreUpper = nombre.toUpperCase();
 
-            // 1. Insertar
-            // Nota: Asumimos que la tabla tiene las columnas correspondientes. Ajustar si faltan.
-            const query = `
-                INSERT INTO productos (
-                    nombre, descripcion, tipo, precio_costo, precio_venta, stock, stock_minimo, ubicacion, codigo_qr, is_active
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
-                RETURNING *
-            `;
+            // 2. Validar si el producto ya existe
+            const existing = await PostgresDB.getInstance().callStoredProcedure(
+                'sp_producto_get_by_nombre',
+                [nombreUpper, tipo, marca_id]
+            );
+            // Si existe, devolvemos conflicto con los datos encontrados
+            if (existing.rows.length > 0) {
+                return res.json({
+                    success: true,
+                    conflict: true,
+                    existingProduct: existing.rows[0]
+                });
+            }
 
-            const values = [
-                nombre.toUpperCase(),
+
+            const db = PostgresDB.getInstance();
+
+            // 3. Llamada al Stored Procedure siguiendo el orden exacto de parámetros
+            const result = await db.callStoredProcedure('sp_producto_crear', [
+                nombreUpper,
                 descripcion || null,
                 tipo,
+                marca_id || null,
                 precio_costo || 0,
-                precio_venta,
+                precio_usd || 0,
+                iva || 21,
                 stock || 0,
                 stock_minimo || 0,
                 ubicacion || null,
-                'PENDING_QR' // Placeholder
-            ];
+                codigo_qr && codigo_qr.trim() !== "" ? codigo_qr : null, // Evita error de duplicado ""
+                is_active ?? true
+            ]);
 
-            const result: any = await PostgresDB.getInstance().executeQuery(query, values);
-            const newProduct = result.rows[0];
+            const producto_id = result.rows[0].sp_producto_crear;
 
-            // 2. Generar QR Real con ID si no vino uno
-            if (!finalQr && newProduct.producto_id) {
-                finalQr = await QRCode.toDataURL(newProduct.producto_id.toString());
-                await PostgresDB.getInstance().executeQuery(
+            // 4. Lógica de Generación de QR (Solo si el usuario no ingresó uno manual)
+            if (!codigo_qr && producto_id) {
+                const qrDataURL = await QRCode.toDataURL(producto_id.toString());
+
+                // Actualizamos el producto recién creado con su código QR generado
+                await db.executeQuery(
                     'UPDATE productos SET codigo_qr = $1 WHERE producto_id = $2',
-                    [finalQr, newProduct.producto_id]
+                    [qrDataURL, producto_id]
                 );
-                newProduct.codigo_qr = finalQr;
             }
 
-            res.status(201).json({ success: true, result: newProduct });
+            res.status(201).json({
+                success: true,
+                result: { producto_id, message: 'Producto creado exitosamente' }
+            });
 
         } catch (error: any) {
-            console.error('Error creando producto:', error);
+            console.error('❌ Error en ProductsController:', error.message);
+
+            // Manejo específico para el error de duplicados
+            if (error.message.includes('productos_codigo_qr_key')) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'El código QR ya pertenece a otro producto.'
+                });
+            }
+
             res.status(500).json({ success: false, error: error.message });
         }
     }

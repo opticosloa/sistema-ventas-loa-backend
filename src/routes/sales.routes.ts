@@ -1,15 +1,18 @@
 import { Router } from "express";
 import { SalesController } from "../controllers/sales.controller";
+import { SalesPdfController } from "../controllers/sales.pdf.controller";
 import { authMiddleware } from "../middlewares";
 
 const router = Router();
 const controller = SalesController.getInstance();
+const pdfController = SalesPdfController.getInstance();
 
 router.post('/', authMiddleware, controller.createSale.bind(controller));
 router.get('/', authMiddleware, controller.getSales.bind(controller));
 router.get('/by-client-dni/:dni', controller.getPendingSalesByDni.bind(controller));
 
 router.get('/:id', authMiddleware, controller.getSaleById.bind(controller));
+router.get('/:id/laboratory-order', pdfController.generateLaboratoryOrder.bind(pdfController)); // New Route
 router.put('/:id', authMiddleware, controller.updateSale.bind(controller));
 router.delete('/:id', authMiddleware, controller.deleteSale.bind(controller));
 
