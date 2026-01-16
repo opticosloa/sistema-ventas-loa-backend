@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PostgresDB } from '../database/postgres';
-import PdfPrinter from 'pdfmake';
+const PdfPrinter = require('pdfmake');
 import { TDocumentDefinitions } from 'pdfmake/interfaces';
 
 // En Node.js usamos las fuentes estándar del sistema para evitar errores de carga de archivos
