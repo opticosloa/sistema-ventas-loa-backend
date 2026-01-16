@@ -1,21 +1,6 @@
 import { Request, Response } from 'express';
 import { PostgresDB } from '../database/postgres';
-import PdfPrinter from 'pdfmake'; // Asegúrate de tener esModuleInterop: true en tsconfig
-import { TDocumentDefinitions } from 'pdfmake/interfaces';
-
-// Definición de fuentes estándar
-const fonts = {
-    Helvetica: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique'
-    }
-};
-
-// Instanciación segura
-// @ts-ignore - Algunas versiones de tipos de pdfmake son inconsistentes
-const printer = new PdfPrinter(fonts);
+import PDFDocument from 'pdfkit';
 
 export class SalesPdfController {
     private static instance: SalesPdfController;
@@ -35,7 +20,7 @@ export class SalesPdfController {
         try {
             const db = PostgresDB.getInstance();
 
-            // 1. Datos de la Venta (Aseguramos obtener nombres de cliente)
+            // 1. Datos de la Venta
             const ventaResult = await db.callStoredProcedure('sp_venta_get_by_id', [id]);
             const venta = ventaResult.rows[0];
 
@@ -47,8 +32,8 @@ export class SalesPdfController {
                 db.callStoredProcedure('sp_pago_get_by_venta', [id])
             ]);
 
-            const items = itemsRes.rows;
-            const pagos = pagosRes.rows;
+            const items = itemsRes.rows || [];
+            const pagos = pagosRes.rows || [];
 
             const total = Number(venta.total) || 0;
             const abonado = pagos.reduce((acc: number, p: any) => acc + Number(p.monto), 0);
@@ -61,137 +46,202 @@ export class SalesPdfController {
                 receta = recetaResult.rows[0];
             }
 
-            const docDefinition = this.buildPdfDefinition(venta, items, receta, total, abonado, saldo);
-
-            // Generar el Stream del PDF
-            const pdfDoc = printer.createPdfKitDocument(docDefinition);
+            // Configurar PDF
+            const doc = new PDFDocument({
+                size: 'A4',
+                margin: 40,
+                autoFirstPage: true
+            });
 
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `inline; filename=Orden_Taller_${id}.pdf`);
 
-            pdfDoc.pipe(res);
-            pdfDoc.end();
+            doc.pipe(res);
+
+            // Helpers de datos
+            const data = { venta, items, receta, total, abonado, saldo };
+
+            // Dibujar Original (Parte Superior)
+            this.drawTalon(doc, 40, 'ORIGINAL', data);
+
+            // Línea de corte
+            this.drawCutLine(doc, 420);
+
+            // Dibujar Copia (Parte Inferior)
+            this.drawTalon(doc, 460, 'COPIA TALLER', data);
+
+            doc.end();
 
         } catch (error: any) {
             console.error("Error generando PDF:", error);
-            res.status(500).json({ success: false, error: error.message });
+            if (!res.headersSent) {
+                res.status(500).json({ success: false, error: error.message });
+            }
         }
     }
 
-    private buildPdfDefinition(venta: any, items: any[], receta: any, total: number, abonado: number, saldo: number): TDocumentDefinitions {
-        // Helpers de formato
+    private drawTalon(doc: PDFKit.PDFDocument, startY: number, label: string, data: any) {
+        const { venta, items, receta, total, abonado, saldo } = data;
         const val = (v: any) => v ?? '';
         const money = (v: number) => `$ ${v.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
 
         const clienteNombre = `${venta.cliente_apellido || ''} ${venta.cliente_nombre || ''}`.trim();
         const fechaRecibido = new Date(venta.created_at).toLocaleDateString('es-AR');
-
-        // Buscamos el nombre del armazón en los items
         const armazonNombre = items.find((i: any) =>
             (i.categoria === 'ARMAZON') || (i.producto_nombre || '').toLowerCase().includes('armaz')
         )?.producto_nombre || '---';
 
-        const buildGradRow = (ojo: string, data: any) => [
-            { text: ojo, alignment: 'center', bold: true },
-            { text: `Esf: ${val(data?.esfera)}`, fontSize: 9 },
-            { text: `Cil: ${val(data?.cilindro)}`, fontSize: 9 },
-            { text: `En: ${val(data?.eje)}°`, fontSize: 9 }
-        ];
+        let y = startY;
 
-        const createTalon = (tipo: string) => [
-            // Cabecera
-            {
-                columns: [
-                    {
-                        width: '*', stack: [
-                            { text: `Cliente: ${clienteNombre}`, bold: true },
-                            { text: `Domicilio: ${val(venta.cliente_direccion)}`, fontSize: 8 },
-                            { text: `Fecha Recibido: ${fechaRecibido}`, fontSize: 8 }
-                        ]
-                    },
-                    {
-                        width: 'auto', stack: [
-                            { text: 'LOA', fontSize: 16, bold: true, alignment: 'center' },
-                            { text: 'Laboratorio Óptico Acuña', fontSize: 7, alignment: 'center' }
-                        ], margin: [10, 0, 10, 0]
-                    },
-                    {
-                        width: '*', stack: [
-                            { text: `Tel: ${val(venta.cliente_telefono)}`, alignment: 'right', fontSize: 8 },
-                            { text: `Prometido: ${val(venta.fecha_entrega_estimada)}`, alignment: 'right', bold: true, fontSize: 8 }
-                        ]
-                    }
-                ]
-            },
-            { canvas: [{ type: 'line', x1: 0, y1: 5, x2: 515, y2: 5, lineWidth: 0.5 }] },
+        // --- HEADER ---
+        // Col 1: Cliente Info
+        doc.fontSize(10).font('Helvetica-Bold').text(`Cliente: ${clienteNombre}`, 40, y);
+        y += 15;
+        doc.fontSize(8).font('Helvetica').text(`Domicilio: ${val(venta.cliente_direccion)}`, 40, y);
+        y += 12;
+        doc.text(`Fecha Recibido: ${fechaRecibido}`, 40, y);
 
-            // Totales y Receta Nº
-            {
-                margin: [0, 5, 0, 5],
-                columns: [
-                    { text: `Receta Nº: ${venta.venta_id?.split('-')[0].toUpperCase()}`, bold: true },
-                    {
-                        width: 120, table: {
-                            body: [
-                                ['Total', { text: money(total), alignment: 'right' }],
-                                ['Seña', { text: money(abonado), alignment: 'right' }],
-                                [{ text: 'Saldo', bold: true }, { text: money(saldo), alignment: 'right', bold: true }]
-                            ]
-                        }, layout: 'noBorders', fontSize: 9
-                    }
-                ]
-            },
+        // Col 2: Logo (Centro)
+        const logoY = startY;
+        doc.fontSize(16).font('Helvetica-Bold').text('LOA', 0, logoY, { align: 'center', width: 595 });
+        doc.fontSize(7).font('Helvetica').text('Laboratorio Óptico Acuña', 0, logoY + 20, { align: 'center', width: 595 });
 
-            // Tabla de Graduación corregida
-            {
-                table: {
-                    widths: [40, 25, 60, 60, 60, '*', 30, 40],
-                    body: [
-                        [
-                            { text: 'Lejos', rowSpan: 2, margin: [0, 10, 0, 0], bold: true, alignment: 'center' },
-                            ...buildGradRow('O.D.', receta?.lejos?.OD),
-                            { text: `Tipo: ${val(receta?.lejos?.tipo)}`, rowSpan: 2, fontSize: 8 },
-                            { text: 'DNP', alignment: 'center', fontSize: 7 },
-                            { text: val(receta?.lejos?.dnp), rowSpan: 2, alignment: 'center', margin: [0, 10, 0, 0] }
-                        ],
-                        ['', ...buildGradRow('O.I.', receta?.lejos?.OI), '', '', ''],
-                        [
-                            { text: 'Cerca', rowSpan: 2, margin: [0, 10, 0, 0], bold: true, alignment: 'center' },
-                            ...buildGradRow('O.D.', receta?.cerca?.OD),
-                            { text: `Tipo: ${val(receta?.cerca?.tipo)}`, rowSpan: 2, fontSize: 8 },
-                            { text: 'DNP', alignment: 'center', fontSize: 7 },
-                            { text: val(receta?.cerca?.dnp), rowSpan: 2, alignment: 'center', margin: [0, 10, 0, 0] }
-                        ],
-                        ['', ...buildGradRow('O.I.', receta?.cerca?.OI), '', '', '']
-                    ]
-                },
-                layout: {
-                    hLineWidth: (i: number) => (i === 0 || i === 2 || i === 4) ? 1 : 0.5,
-                    vLineWidth: (i: number, node: any) => (i === 0 || i === node.table.widths.length) ? 1 : 0.5
-                }
-            },
+        // Col 3: Datos Venta (Derecha)
+        const col3X = 400;
+        let yRight = startY;
+        doc.fontSize(8).font('Helvetica').text(`Tel: ${val(venta.cliente_telefono)}`, col3X, yRight, { align: 'right', width: 155 });
+        yRight += 12;
+        doc.font('Helvetica-Bold').text(`Prometido: ${val(venta.fecha_entrega_estimada)}`, col3X, yRight, { align: 'right', width: 155 });
 
-            // Info Adicional
-            {
-                margin: [0, 5, 0, 0],
-                text: [
-                    { text: 'Armazón: ', bold: true }, `${armazonNombre}\n`,
-                    { text: 'Multifocal: ', bold: true }, `${val(receta?.multifocal?.tipo)} | Altura: ${val(receta?.multifocal?.altura)}`
-                ], fontSize: 9
-            },
-            { text: `Observaciones: ${val(venta.observaciones)}`, margin: [0, 5, 0, 0], fontSize: 8, italics: true },
-            { text: tipo, alignment: 'right', fontSize: 6, margin: [0, 5, 0, 0] }
-        ];
+        y = Math.max(y, logoY + 35) + 10;
 
-        return {
-            pageSize: 'A4',
-            pageMargins: [40, 20, 40, 20],
-            content: [
-                ...createTalon('ORIGINAL'),
-                { text: '\n- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n', alignment: 'center', color: '#ccc' },
-                ...createTalon('COPIA TALLER')
-            ] as any,
-            defaultStyle: { font: 'Helvetica' } // Usamos la fuente mapeada arriba
-        };
+        // Línea separadora header
+        doc.moveTo(40, y).lineTo(555, y).lineWidth(0.5).stroke();
+        y += 10;
+
+        // --- SUBHEADER: Receta N y Totales ---
+        const recetaNum = venta.venta_id?.split('-')[0].toUpperCase() || '---';
+        doc.fontSize(10).font('Helvetica-Bold').text(`Receta Nº: ${recetaNum}`, 40, y);
+
+        // Tabla de Totales (simulada a la derecha)
+        const totalsX = 400;
+        const totalsWidth = 155;
+        let totalsY = y;
+
+        doc.fontSize(9).font('Helvetica');
+        this.drawRow(doc, totalsX, totalsY, 'Total', money(total), totalsWidth, false);
+        totalsY += 12;
+        this.drawRow(doc, totalsX, totalsY, 'Seña', money(abonado), totalsWidth, false);
+        totalsY += 12;
+        this.drawRow(doc, totalsX, totalsY, 'Saldo', money(saldo), totalsWidth, true);
+
+        y = totalsY + 20;
+
+        // --- TABLA DE GRADUACIÓN ---
+        this.drawGraduationTable(doc, y, receta);
+
+        y += 90; // Espacio que ocupa la tabla aprox
+
+        // --- INFO ADICIONAL ---
+        doc.fontSize(9).font('Helvetica-Bold').text('Armazón: ', 40, y, { continued: true })
+            .font('Helvetica').text(`${armazonNombre}`);
+        y += 15;
+
+        doc.font('Helvetica-Bold').text('Multifocal: ', 40, y, { continued: true })
+            .font('Helvetica').text(`${val(receta?.multifocal?.tipo)} | Altura: ${val(receta?.multifocal?.altura)}`);
+        y += 20;
+
+        doc.fontSize(8).font('Helvetica-Oblique').text(`Observaciones: ${val(venta.observaciones)}`, 40, y);
+
+        // Label Tipo (Original/Copia)
+        doc.fontSize(6).font('Helvetica').text(label, 40, startY + 380, { align: 'right', width: 515 });
+    }
+
+    private drawRow(doc: PDFKit.PDFDocument, x: number, y: number, label: string, value: string, width: number, isBold: boolean) {
+        const font = isBold ? 'Helvetica-Bold' : 'Helvetica';
+        doc.font(font).text(label, x, y);
+        doc.text(value, x, y, { align: 'right', width: width });
+    }
+
+    private drawCutLine(doc: PDFKit.PDFDocument, y: number) {
+        doc.moveTo(20, y).lineTo(575, y).dash(5, { space: 3 }).lineWidth(0.5).strokeColor('#ccc').stroke();
+        doc.undash().strokeColor('black'); // Reset
+    }
+
+    private drawGraduationTable(doc: PDFKit.PDFDocument, startY: number, receta: any) {
+        const val = (v: any) => v ?? '';
+
+        // Configuración de columnas
+        const xLejosCerca = 40;
+        const xOjo = 90;
+        const xEsf = 120;
+        const xCil = 180;
+        const xEje = 240;
+        const xTipo = 300;
+        const xDNPLabel = 480;
+        const xDNPVal = 510;
+
+        const rowHeight = 20;
+        let currentY = startY;
+
+        // Headers implícitos o bordes
+        // Dibujamos el borde exterior
+        // Lejos Row 1 (OD)
+        this.drawGradCell(doc, xLejosCerca, currentY, 'Lejos', true, true);
+        this.drawGradCell(doc, xOjo, currentY, 'O.D.', true);
+        this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.lejos?.OD?.esfera)}`);
+        this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.lejos?.OD?.cilindro)}`);
+        this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.lejos?.OD?.eje)}°`);
+
+        // Tipo Lejos (spans 2 rows)
+        doc.fontSize(8).text(`Tipo: ${val(receta?.lejos?.tipo)}`, xTipo, currentY + 12);
+
+        // DNP Lejos (spans 2 rows)
+        doc.fontSize(7).text('DNP', xDNPLabel, currentY + 12, { align: 'center', width: 30 });
+        doc.fontSize(9).text(val(receta?.lejos?.dnp), xDNPVal, currentY + 12, { align: 'center', width: 40 });
+
+        currentY += rowHeight;
+
+        // Lejos Row 2 (OI)
+        // Lejos label continues (visual only needed if not spanning, but here simpler to leave blank or center vertically)
+        this.drawGradCell(doc, xOjo, currentY, 'O.I.', true);
+        this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.lejos?.OI?.esfera)}`);
+        this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.lejos?.OI?.cilindro)}`);
+        this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.lejos?.OI?.eje)}°`);
+
+        currentY += rowHeight + 5; // spacing
+
+        // Cerca Row 1 (OD)
+        this.drawGradCell(doc, xLejosCerca, currentY, 'Cerca', true, true);
+        this.drawGradCell(doc, xOjo, currentY, 'O.D.', true);
+        this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.cerca?.OD?.esfera)}`);
+        this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.cerca?.OD?.cilindro)}`);
+        this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.cerca?.OD?.eje)}°`);
+
+        // Tipo Cerca (spans 2 rows)
+        doc.fontSize(8).font('Helvetica').text(`Tipo: ${val(receta?.cerca?.tipo)}`, xTipo, currentY + 12);
+
+        // DNP Cerca (spans 2 rows)
+        doc.fontSize(7).text('DNP', xDNPLabel, currentY + 12, { align: 'center', width: 30 });
+        doc.fontSize(9).text(val(receta?.cerca?.dnp), xDNPVal, currentY + 12, { align: 'center', width: 40 });
+
+        currentY += rowHeight;
+
+        // Cerca Row 2 (OI)
+        this.drawGradCell(doc, xOjo, currentY, 'O.I.', true);
+        this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.cerca?.OI?.esfera)}`);
+        this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.cerca?.OI?.cilindro)}`);
+        this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.cerca?.OI?.eje)}°`);
+
+        // Líneas horizontales de separación (simplificado)
+        doc.lineWidth(0.5).strokeColor('#aaa');
+        doc.moveTo(xLejosCerca, startY).lineTo(550, startY).stroke(); // Top
+        doc.moveTo(xLejosCerca, startY + rowHeight * 2).lineTo(550, startY + rowHeight * 2).stroke(); // Mid (after Lejos)
+        doc.moveTo(xLejosCerca, startY + rowHeight * 4 + 5).lineTo(550, startY + rowHeight * 4 + 5).stroke(); // Bottom (after Cerca)
+    }
+
+    private drawGradCell(doc: PDFKit.PDFDocument, x: number, y: number, text: string, bold = false, big = false) {
+        doc.fontSize(big ? 10 : 9).font(bold ? 'Helvetica-Bold' : 'Helvetica');
+        doc.text(text, x, y + 5);
     }
 }
