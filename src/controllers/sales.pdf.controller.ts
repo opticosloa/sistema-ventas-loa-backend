@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { PostgresDB } from '../database/postgres';
-const PdfPrinter = require('pdfmake');
+import PdfPrinter from 'pdfmake'; // Asegúrate de tener esModuleInterop: true en tsconfig
 import { TDocumentDefinitions } from 'pdfmake/interfaces';
 
-// En Node.js usamos las fuentes estándar del sistema para evitar errores de carga de archivos
+// Definición de fuentes estándar
 const fonts = {
     Helvetica: {
         normal: 'Helvetica',
@@ -13,6 +13,8 @@ const fonts = {
     }
 };
 
+// Instanciación segura
+// @ts-ignore - Algunas versiones de tipos de pdfmake son inconsistentes
 const printer = new PdfPrinter(fonts);
 
 export class SalesPdfController {
