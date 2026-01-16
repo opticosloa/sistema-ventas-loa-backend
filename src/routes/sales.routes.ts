@@ -19,6 +19,8 @@ router.post('/:id/entregar', authMiddleware, controller.entregarVenta.bind(contr
 router.put('/:id/cancel', controller.cancelSale.bind(controller));
 router.put('/:id/observation', authMiddleware, controller.updateObservation.bind(controller));
 router.put('/:id/budget', authMiddleware, controller.markAsBudget.bind(controller));
+
+router.post('/cover-insurance', authMiddleware, controller.coverInsurance.bind(controller));
 router.post('/returns', authMiddleware, controller.createReturn.bind(controller));
 
 export default router;

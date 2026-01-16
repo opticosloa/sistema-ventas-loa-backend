@@ -1,7 +1,6 @@
 import { PostgresDB } from "../database/postgres";
 import { Request, Response } from 'express';
 import { Sales } from "../types/sales";
-import { SalesService } from "../service/sales.service";
 
 export class SalesController {
     private static instance: SalesController;
@@ -32,16 +31,15 @@ export class SalesController {
         }
 
         try {
-            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_crear', [
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_crear', [
                 vendedor_id,
                 cliente_id,
                 sucursal_id,
-                urgente ?? false,
-                descuento || 0
+                urgente,
+                descuento,
+                JSON.stringify(items)
             ]);
 
-            // SP returns json_build_object
-            // result[0] might be { sp_venta_crear: { venta_id: 123, ... } }
 
             const ventaData = result.rows?.[0]?.sp_venta_crear || result.rows?.[0] || {};
             const venta_id = ventaData?.venta_id;
@@ -316,6 +314,42 @@ export class SalesController {
 
         } catch (error: any) {
             console.error("Error en updateObservation (SP):", error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
+
+    public async coverInsurance(req: Request, res: Response) {
+        const { venta_id, obra_social_id, nro_orden } = req.body;
+
+        if (!venta_id || !obra_social_id || !nro_orden) {
+            return res.status(400).json({ success: false, error: "Datos incompletos para procesar la cobertura." });
+        }
+
+        try {
+            // Ejecutamos el SP que hace todo el trabajo pesado
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_aplicar_cobertura_os', [
+                venta_id,
+                obra_social_id,
+                nro_orden
+            ]);
+
+            const montoCubierto = result.rows[0].sp_venta_aplicar_cobertura_os;
+
+            if (Number(montoCubierto) === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: "La venta no contiene cristales o marcos elegibles para cobertura."
+                });
+            }
+
+            res.json({
+                success: true,
+                covered_amount: Number(montoCubierto),
+                message: `Se aplicó una cobertura de $${montoCubierto} exitosamente.`
+            });
+
+        } catch (error: any) {
+            console.error("Error en SP sp_venta_aplicar_cobertura_os:", error);
             res.status(500).json({ success: false, error: error.message });
         }
     }

@@ -15,6 +15,8 @@ import salesItemsRoutes from './routes/sales_items.routes';
 import crystalsRoutes from './routes/crystals.routes';
 import cashierRoutes from './routes/cashier.routes';
 import currencyRoutes from './routes/currency.routes';
+import obrasSocialesRoutes from './routes/obras_sociales.routes';
+import liquidacionesRoutes from './routes/liquidaciones.routes';
 
 export class AppRoutes {
     static get routes(): Router {
@@ -36,6 +38,8 @@ export class AppRoutes {
         router.use('/api/crystals', crystalsRoutes);
         router.use('/api/cashier', cashierRoutes);
         router.use('/api/currency', currencyRoutes);
+        router.use('/api/obras-sociales', obrasSocialesRoutes);
+        router.use('/api/liquidaciones', liquidacionesRoutes);
 
         return router;
     }
