@@ -43,10 +43,10 @@ export class BrandController {
     public async getBrands(req: Request, res: Response) {
         try {
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_marca_get');
-            res.json({ success: true, result });
+            res.json({ success: true, result: result.rows });
         } catch (error) {
-            console.log(error);
-            res.status(500).json({ success: false, error });
+            console.error(error);
+            res.status(500).json({ success: false, error: 'Error' });
         }
     }
 

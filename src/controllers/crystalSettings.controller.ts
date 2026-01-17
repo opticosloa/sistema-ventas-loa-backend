@@ -66,4 +66,28 @@ export class CrystalSettingsController {
             res.status(500).json({ message: 'Error creating treatment' });
         }
     }
+
+    public async updateMaterial(req: Request, res: Response) {
+        const { id } = req.params;
+        const { nombre, is_active } = req.body;
+        try {
+            const db = PostgresDB.getInstance();
+            const result = await db.callStoredProcedure('sp_cristal_material_update', [id, nombre, is_active]);
+            res.json(result.rows[0]);
+        } catch (error) {
+            res.status(500).json({ message: 'Error updating material' });
+        }
+    }
+
+    public async updateTreatment(req: Request, res: Response) {
+        const { id } = req.params;
+        const { nombre, is_active } = req.body;
+        try {
+            const db = PostgresDB.getInstance();
+            const result = await db.callStoredProcedure('sp_cristal_treatment_update', [id, nombre, is_active]);
+            res.json(result.rows[0]);
+        } catch (error) {
+            res.status(500).json({ message: 'Error updating treatment' });
+        }
+    }
 }
