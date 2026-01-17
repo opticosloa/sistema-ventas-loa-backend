@@ -54,30 +54,19 @@ export class ProductsController {
         } = req.body;
 
         try {
-            // 1. Validaciones básicas de negocio
-            if (!nombre || !tipo || precio_usd === undefined) {
-                return res.status(400).json({ success: false, error: 'Nombre, tipo y precio de venta son obligatorios' });
-            }
-            const nombreUpper = nombre.toUpperCase();
-
-            // 2. Validar si el producto ya existe
-            const existing = await PostgresDB.getInstance().callStoredProcedure(
-                'sp_producto_get_by_nombre',
-                [nombreUpper, tipo, marca_id]
-            );
-            // Si existe, devolvemos conflicto con los datos encontrados
-            if (existing.rows.length > 0) {
-                return res.json({
-                    success: true,
-                    conflict: true,
-                    existingProduct: existing.rows[0]
-                });
-            }
-
-
             const db = PostgresDB.getInstance();
+            const nombreUpper = nombre.trim().toUpperCase();
 
-            // 3. Llamada al Stored Procedure siguiendo el orden exacto de parámetros
+            // 1. Verificación de duplicados (Asegúrate de que este SP también tenga 3 params)
+            const existing = await db.callStoredProcedure('sp_producto_get_by_nombre', [
+                nombreUpper, tipo, marca_id || null
+            ]);
+
+            if (existing.rows.length > 0) {
+                return res.json({ success: true, conflict: true, existingProduct: existing.rows[0] });
+            }
+
+            // 2. Llamada al SP con el orden EXACTO de 12 parámetros
             const result = await db.callStoredProcedure('sp_producto_crear', [
                 nombreUpper,
                 descripcion || null,
@@ -89,39 +78,25 @@ export class ProductsController {
                 stock || 0,
                 stock_minimo || 0,
                 ubicacion || null,
-                codigo_qr && codigo_qr.trim() !== "" ? codigo_qr : null, // Evita error de duplicado ""
+                codigo_qr && codigo_qr.trim() !== "" ? codigo_qr : null,
                 is_active ?? true
             ]);
 
             const producto_id = result.rows[0].sp_producto_crear;
 
-            // 4. Lógica de Generación de QR (Solo si el usuario no ingresó uno manual)
+            // 3. Lógica de QR (si es necesario)
             if (!codigo_qr && producto_id) {
                 const qrDataURL = await QRCode.toDataURL(producto_id.toString());
-
-                // Actualizamos el producto recién creado con su código QR generado
                 await db.executeQuery(
                     'UPDATE productos SET codigo_qr = $1 WHERE producto_id = $2',
                     [qrDataURL, producto_id]
                 );
             }
 
-            res.status(201).json({
-                success: true,
-                result: { producto_id, message: 'Producto creado exitosamente' }
-            });
+            res.status(201).json({ success: true, result: { producto_id, message: 'Producto creado' } });
 
         } catch (error: any) {
-            console.error('❌ Error en ProductsController:', error.message);
-
-            // Manejo específico para el error de duplicados
-            if (error.message.includes('productos_codigo_qr_key')) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'El código QR ya pertenece a otro producto.'
-                });
-            }
-
+            console.error('❌ Error:', error.message);
             res.status(500).json({ success: false, error: error.message });
         }
     }
