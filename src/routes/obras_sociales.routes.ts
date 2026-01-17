@@ -4,6 +4,9 @@ import { ObrasSocialesController } from '../controllers/obras_sociales.controlle
 const router = Router();
 
 router.get('/', ObrasSocialesController.getInstance().getAll);
+router.get('/search/:q', ObrasSocialesController.getInstance().searchObrasSociales);
+router.get('/:id', ObrasSocialesController.getInstance().getObraSocialById);
 router.post('/', ObrasSocialesController.getInstance().upsert);
+router.delete('/:id', ObrasSocialesController.getInstance().deleteObraSocial);
 
 export default router;

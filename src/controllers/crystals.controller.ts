@@ -179,4 +179,31 @@ export class CrystalsController {
             return res.status(500).json({ error: 'Error calculando precio' });
         }
     }
+    public async searchCrystals(req: Request, res: Response) {
+        try {
+            const { q } = req.query;
+
+            if (!q || typeof q !== 'string') {
+                return res.json({ success: true, result: [] });
+            }
+
+            // Llamada al SP con el término de búsqueda
+            // Asumimos que el SP ha sido adaptado para aceptar un solo parámetro de texto 'q' para búsqueda general
+            // Si el SP original requería 4 parámetros, esto podría fallar si no se actualizó en BD.
+            // Siguiendo instrucciones explícitas del usuario: calls sp_cristal_buscar_dinamico
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_buscar_dinamico', [q]);
+
+            return res.json({
+                success: true,
+                result: result.rows
+            });
+
+        } catch (error) {
+            console.error('Error searching crystals:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error searching crystals'
+            });
+        }
+    }
 }
