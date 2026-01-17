@@ -72,7 +72,6 @@ export class CrystalSettingsController {
         const { nombre, is_active } = req.body;
         try {
             const db = PostgresDB.getInstance();
-            console.log('Contenido del update', id, nombre, is_active)
             const result = await db.callStoredProcedure('sp_cristal_material_update', [id, nombre, is_active]);
             res.json(result.rows[0]);
         } catch (error) {
@@ -86,8 +85,7 @@ export class CrystalSettingsController {
         const { nombre, is_active } = req.body;
         try {
             const db = PostgresDB.getInstance();
-            console.log('Contenido del update', id, nombre, is_active)
-            const result = await db.callStoredProcedure('sp_cristal_treatment_update', [id, nombre, is_active]);
+            const result = await db.callStoredProcedure('sp_cristal_tratamiento_update', [id, nombre, is_active]);
             res.json(result.rows[0]);
         } catch (error) {
             console.error('Error updating treatment:', error);
