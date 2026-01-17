@@ -20,7 +20,8 @@ export class BrandController {
         const { nombre, proveedor_id }: Brand = req.body;
         try {
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_marca_crear', [nombre, proveedor_id]);
-            res.json({ success: true, result });
+            const brand: Brand = result.rows[0];
+            res.json({ success: true, brand });
         } catch (error) {
             console.log(error);
             res.status(500).json({ success: false, error });
