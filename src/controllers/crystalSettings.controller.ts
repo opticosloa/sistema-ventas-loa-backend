@@ -31,7 +31,7 @@ export class CrystalSettingsController {
             res.json({ success: true, result: result.rows });
         } catch (error) {
             console.error('Error getting treatments:', error);
-            res.status(500).json({ message: 'Error retrieving treatments' });
+            res.status(500).json({ message: 'Error retrieving treatments: ' + error });
         }
     }
 
@@ -76,6 +76,7 @@ export class CrystalSettingsController {
             const result = await db.callStoredProcedure('sp_cristal_material_update', [id, nombre, is_active]);
             res.json(result.rows[0]);
         } catch (error) {
+            console.error('Error updating material:', error);
             res.status(500).json({ message: 'Error updating material' });
         }
     }
@@ -89,6 +90,7 @@ export class CrystalSettingsController {
             const result = await db.callStoredProcedure('sp_cristal_treatment_update', [id, nombre, is_active]);
             res.json(result.rows[0]);
         } catch (error) {
+            console.error('Error updating treatment:', error);
             res.status(500).json({ message: 'Error updating treatment' });
         }
     }
