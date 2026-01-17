@@ -16,15 +16,13 @@ export class SalesItemsController {
     }
 
     public async createSalesItem(req: Request, res: Response) {
-        const { venta_id, producto_id, servicio_id, cantidad, precio_unitario, subtotal }: SalesItem = req.body;
+        const { venta_id, producto_id, cantidad, precio_unitario }: SalesItem = req.body;
         try {
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_crear', [
                 venta_id,
                 producto_id,
-                servicio_id,
                 cantidad,
-                precio_unitario,
-                subtotal
+                precio_unitario
             ]);
             res.json({ success: true, result });
         } catch (error) {

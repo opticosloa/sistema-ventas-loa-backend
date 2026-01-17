@@ -23,7 +23,10 @@ export class CrystalsController {
                 cilindro_min,
                 cilindro_max,
                 precio_usd,
-                stock_inicial
+                precio_costo,
+                stock_inicial,
+                stock_minimo,
+                ubicacion
             } = req.body;
 
             // Validación básica
@@ -33,6 +36,7 @@ export class CrystalsController {
 
             // Llamada al SP sp_cristales_upsert_rango
             // Nota: El orden de los parámetros debe coincidir EXACTAMENTE con el del SP SQL
+            // Asumimos que el SP ha sido actualizado para aceptar: precio_costo, stock_minimo, ubicacion
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_cristales_upsert_rango', [
                 material,
                 tratamiento,
@@ -41,8 +45,10 @@ export class CrystalsController {
                 Number(cilindro_min),
                 Number(cilindro_max),
                 Number(precio_usd),
+                Number(precio_costo || 0),
                 Number(stock_inicial || 0),
-                null // ubicacion (opcional, enviamos null por defecto)
+                Number(stock_minimo || 2),
+                ubicacion || null
             ]);
 
             // El SP devuelve un entero (v_contador)
