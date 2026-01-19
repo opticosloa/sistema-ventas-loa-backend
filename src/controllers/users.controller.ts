@@ -146,7 +146,8 @@ export class UsersController {
                 rol: userData.rol,
                 nombre: userData.nombre,
                 apellido: userData.apellido,
-                sucursal_id: userData.sucursal_id
+                sucursal_id: userData.sucursal_id,
+                max_descuento: userData.max_descuento
             },
                 envs.JWT_SECRET, { expiresIn: '16h' });
 
@@ -218,7 +219,8 @@ export class UsersController {
                     rol: (decoded as any).rol,
                     nombre: (decoded as any).nombre,
                     apellido: (decoded as any).apellido,
-                    sucursal_id: (decoded as any).sucursal_id
+                    sucursal_id: (decoded as any).sucursal_id,
+                    max_descuento: (decoded as any).max_descuento
                 }
             });
         } catch (error) {
