@@ -167,7 +167,23 @@ export class ProductsController {
         const { tipo } = req.params;
 
         try {
-            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_producto_get_by_tipo', [tipo]);
+            // Support for multiple types separated by comma (e.g. "ARMAZON,ANTEOJO_SOL")
+            if (!tipo) {
+                return res.status(400).json({ success: false, error: 'Tipo de producto no proporcionado' });
+            }
+            const typesArray = tipo.split(',').map(t => t.trim().toUpperCase());
+
+            const query = `
+                SELECT p.*, m.nombre as marca
+                FROM productos p
+                LEFT JOIN marcas m ON p.marca_id = m.marca_id
+                WHERE p.tipo = ANY($1) 
+                AND p.is_active = true 
+                ORDER BY p.nombre ASC
+            `;
+
+            const result = await PostgresDB.getInstance().executeQuery(query, [typesArray]);
+
             res.json({
                 success: true,
                 result: result.rows
