@@ -18,6 +18,7 @@ import currencyRoutes from './routes/currency.routes';
 import obrasSocialesRoutes from './routes/obras_sociales.routes';
 import liquidacionesRoutes from './routes/liquidaciones.routes';
 import providersRoutes from './routes/providers.routes';
+import cashRoutes from './routes/cash.routes';
 
 export class AppRoutes {
     static get routes(): Router {
@@ -38,6 +39,7 @@ export class AppRoutes {
         router.use('/api/payments', paymentsRoutes);
         router.use('/api/crystals', crystalsRoutes);
         router.use('/api/cashier', cashierRoutes);
+        router.use('/api/cash', cashRoutes);
         router.use('/api/currency', currencyRoutes);
         router.use('/api/obras-sociales', obrasSocialesRoutes);
         router.use('/api/liquidaciones', liquidacionesRoutes);
