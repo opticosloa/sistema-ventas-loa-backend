@@ -22,6 +22,7 @@ router.put('/profile/:email', controller.updateProfile.bind(controller));
 router.get('/:id', controller.getUserById.bind(controller));
 router.put('/:id', controller.updateUser.bind(controller));
 router.delete('/:id', controller.deleteUser.bind(controller));
+router.put('/:id/max-descuento', controller.updateMaxDescuento.bind(controller));
 
 
 

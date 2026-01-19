@@ -379,4 +379,20 @@ export class UsersController {
             });
         }
     }
+    public async updateMaxDescuento(req: Request, res: Response) {
+        const { id } = req.params;
+        const { max_descuento } = req.body;
+
+        try {
+            await PostgresDB.getInstance().callStoredProcedure('sp_usuario_max_descuento', [
+                id,
+                max_descuento
+            ]);
+
+            res.json({ success: true, message: 'Max descuento actualizado correctamente' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
 }
