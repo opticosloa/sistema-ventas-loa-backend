@@ -442,6 +442,8 @@ export class PaymentService {
             }
             // Si no es ninguno (ej: 'in_process', 'pending', 'opened'), se queda en 'PENDIENTE'
 
+            // [DEBUG]
+            console.log(`🤔 [Service] Estado interpretado para DB: ${db_status} (basado en raw: ${raw_status})`);
             // --- C. Actualizar DB ---
             const id_para_buscar = external_reference || final_preference_id;
 
@@ -457,9 +459,11 @@ export class PaymentService {
                 db_status, // Enviamos 'APROBADO' o 'RECHAZADO'
                 resourceId
             ]);
-
+            // [DEBUG] Imprimir resultado crudo de la DB
+            console.log("🗄️ [Service] Resultado DB Raw:", JSON.stringify(result));
             const updated = result.rows?.[0]?.sp_pago_actualizar_status;
-
+            // [DEBUG]
+            console.log(`📝 [Service] ¿Filas actualizadas/encontradas?: ${updated}`);
             if (updated === false) {
                 console.warn(`[Webhook] Pago no encontrado (Ref: ${id_para_buscar})`);
                 return false;

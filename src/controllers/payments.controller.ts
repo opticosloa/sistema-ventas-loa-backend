@@ -93,6 +93,8 @@ export class PaymentsController {
                 resourceId,
                 data
             );
+            // [DEBUG]
+            console.log(`🏁 [Controller] Fin proceso servicio. Resultado (found):`, found);
 
             if (found === false) {
                 res.status(404).json({ error: 'Payment not found yet' });
