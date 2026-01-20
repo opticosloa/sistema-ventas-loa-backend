@@ -139,6 +139,22 @@ export class ProductsController {
         }
     }
 
+    public async updatePricesByBrand(req: Request, res: Response) {
+        const { marca_id, porcentaje } = req.body;
+
+        if (!marca_id || porcentaje === undefined) {
+            return res.status(400).json({ success: false, error: 'Marca ID and Porcentaje are required' });
+        }
+
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_producto_actualizar_precios_marca', [marca_id, porcentaje]);
+            res.json({ success: true, result });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
     // Mantener métodos antiguos por compatibilidad si es necesario, o refactorizar rutas.
     // ... (Otros métodos omitidos por brevedad si no son requeridos explícitamente en este paso, pero es mejor dejarlos si el router los usa)
 

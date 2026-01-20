@@ -11,6 +11,7 @@ const settingsController = CrystalSettingsController.getInstance();
 router.post('/batch', controller.createBatchCristales.bind(controller));
 router.get('/check-stock', authMiddleware, controller.checkStock.bind(controller));
 router.get('/search-range', authMiddleware, controller.searchRange.bind(controller));
+router.post('/update-prices-selectively', authMiddleware, controller.updatePricesSelectively.bind(controller));
 router.get('/price-check', controller.getPriceForSale.bind(controller));
 
 router.get('/search', controller.searchCrystals.bind(controller));

@@ -206,4 +206,27 @@ export class CrystalsController {
             });
         }
     }
+
+    public async updatePricesSelectively(req: Request, res: Response) {
+        try {
+            const { material, tratamiento, porcentaje } = req.body;
+
+            if (porcentaje === undefined) {
+                return res.status(400).json({ success: false, error: 'Porcentaje is required' });
+            }
+
+            // Call SP with material, treatment (which can be 'ALL' or specific) and percentage
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_actualizar_precios_selectivo', [
+                material || 'ALL',
+                tratamiento || 'ALL',
+                porcentaje
+            ]);
+
+            res.json({ success: true, result });
+
+        } catch (error) {
+            console.error('Error updating crystal prices:', error);
+            res.status(500).json({ success: false, error: 'Error updating crystal prices' });
+        }
+    }
 }
