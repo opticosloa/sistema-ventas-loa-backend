@@ -369,7 +369,15 @@ export class PaymentService {
            { "id": "...", "status": "OPEN", "amount": 1500, ... }
         */
         console.log(data);
-        // Optionally, we could store the intent_id if needed, but external_reference links it back.
+
+        // UPDATE DB WITH INTENT ID
+        if (data.id) {
+            await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_preference', [
+                pago_id,
+                data.id
+            ]);
+        }
+
         return { success: true, intent_id: data.id, pago_id, status: data.status };
     }
 
@@ -516,7 +524,7 @@ export class PaymentService {
         // Do not calculate 'pagado' or 'estado' here.
         return {
             total: Number(sale.total) || 0,
-            pagado: Number(sale.pagado) || 0,
+            pagado: Number(sale.total_pagado) || 0,
             estado: sale.estado || 'PENDIENTE',
             pagos: pagos
         };
@@ -593,6 +601,13 @@ export class PaymentService {
 
             if (!qrData) {
                 throw new Error("La respuesta de Mercado Pago no contiene qr_data");
+            }
+
+            if (data.id) {
+                await PostgresDB.getInstance().callStoredProcedure('sp_pago_actualizar_preference', [
+                    pago_id_db,
+                    data.id
+                ]);
             }
 
             return {
