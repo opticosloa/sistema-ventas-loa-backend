@@ -113,8 +113,10 @@ export class SalesPdfController {
         const col3X = 400;
         let yRight = startY;
         doc.fontSize(8).font('Helvetica').text(`Tel: ${val(venta.cliente_telefono)}`, col3X, yRight, { align: 'right', width: 155 });
-        yRight += 11; // Reduced from 12
-        doc.font('Helvetica-Bold').text(`Prometido: ${val(venta.fecha_entrega_estimada)}`, col3X, yRight, { align: 'right', width: 155 });
+        // yRight += 11; // Reduced from 12
+        // doc.font('Helvetica-Bold').text(`Prometido: ${val(venta.fecha_entrega_estimada)}`, col3X, yRight, { align: 'right', width: 155 });
+        yRight += 11;
+        doc.font('Helvetica').text(`Obra Social: ${val(receta?.obraSocial || 'Sin obra social')}`, col3X, yRight, { align: 'right', width: 155 });
 
         y = Math.max(y, logoY + 30) + 8; // Compacted slightly
 
