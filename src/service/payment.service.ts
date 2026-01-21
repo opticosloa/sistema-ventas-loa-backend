@@ -441,7 +441,7 @@ export class PaymentService {
             // Lista de estados que consideramos EXITOSOS
             const successStatuses = ['approved', 'processed', 'closed', 'accredited'];
             // Lista de estados que consideramos FALLIDOS
-            const failureStatuses = ['rejected', 'cancelled', 'cancelled_by_player'];
+            const failureStatuses = ['rejected', 'cancelled', 'canceled', 'cancelled_by_player'];
 
             if (successStatuses.includes(raw_status)) {
                 db_status = 'APROBADO';

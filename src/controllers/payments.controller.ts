@@ -77,10 +77,13 @@ export class PaymentsController {
         // El preference_id solo vendrá aquí si lo configuraste manualmente en la URL de notificación
         const mp_preference_id = req.query.preference_id as string;
 
-        if (!resourceType && req.body.intent_type && req.body.payment) {
+        if (!resourceType && (req.body.intent_type || req.body.payment || req.body.id)) {
             console.log("📍 Webhook Point Detectado!");
             resourceType = 'payment'; // Lo tratamos como un pago normal
-            resourceId = req.body.payment.id; // Sacamos el ID del objeto 'payment' interno
+
+            // INTENT ID (from Point) is often in 'id' or 'payment.id'
+            // Point often sends { id: "...", intent_type: "payment", ... }
+            resourceId = req.body.payment?.id || req.body.id;
         }
 
         console.log(`Procesando como: Type=${resourceType}, ID=${resourceId}`);
