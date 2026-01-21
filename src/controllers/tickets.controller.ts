@@ -37,20 +37,30 @@ export class TicketsController {
     }
 
     public async getTickets(req: Request, res: Response) {
-        // Query params: sucursal_id (obligatorio), estado (opcional), search (opcional)
+        // Query params: sucursal_id (opcional para admin), estado (opcional), search (opcional)
         const { sucursal_id, estado, search } = req.query;
-
-        if (!sucursal_id) {
-            return res.status(400).json({ success: false, error: 'sucursal_id es requerido' });
-        }
+        const user = req.user;
 
         try {
+            let filterSucursalId: string | null = null;
+
+            // Determinar el rol (ajustar segun los roles reales de tu sistema)
+            const isAdmin = user?.rol === 'ADMIN' || user?.rol === 'SUPERADMIN';
+
+            if (isAdmin) {
+                // Si es admin, usa el query param si existe, sino null (todas)
+                filterSucursalId = (sucursal_id as string) || null;
+            } else {
+                // Si no es admin, fuerza su sucursal
+                filterSucursalId = user?.sucursal_id || null;
+            }
+
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_ticket_listar', [
-                sucursal_id,
+                filterSucursalId,
                 estado || null,
                 search || null
             ]);
-            // sp_ticket_listar returns a table
+
             res.json({ success: true, result: result.rows || result });
         } catch (error: any) {
             console.error('Error fetching tickets:', error);
