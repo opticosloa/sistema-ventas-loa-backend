@@ -10,5 +10,6 @@ router.get('/by-id/:id', controller.getClientById.bind(controller));
 router.get('/by-dni/:dni', controller.getClientByDNI.bind(controller));
 router.put('/:id', controller.updateClient.bind(controller));
 router.delete('/:id', controller.deleteClient.bind(controller));
+router.get('/:id/account-status', controller.getAccountStatus.bind(controller));
 
 export default router;

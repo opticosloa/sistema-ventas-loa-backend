@@ -107,4 +107,30 @@ export class ClientsController {
             res.status(500).json({ success: false, error });
         }
     }
+
+    public async getAccountStatus(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+            // Reusing sp_cliente_get_by_id which likely returns fields including cuenta_corriente
+            // If we need a dedicated lightweight SP, we can create one, but this is efficient enough.
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_cliente_get_by_id', [id]);
+
+            // Check if result is empty
+            if (!result.rows || result.rows.length === 0) {
+                // Return 0 if client not found or no account info (safer default)
+                return res.json({ success: true, result: { cuenta_corriente: 0 } });
+            }
+
+            const client = result.rows[0];
+            res.json({
+                success: true,
+                result: {
+                    cuenta_corriente: Number(client.cuenta_corriente || 0)
+                }
+            });
+        } catch (error) {
+            console.error("Error fetching account status:", error);
+            res.status(500).json({ success: false, error });
+        }
+    }
 }

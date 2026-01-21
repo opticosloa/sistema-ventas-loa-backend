@@ -32,11 +32,12 @@ export class PaymentService {
 
         // sp_pago_crear(venta_id, metodo, monto, estado?)
         // Assuming SP handles the 'null' as default/pending status.
+        console.log(Preference)
         const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_crear', [
             venta_id,
             metodo,
             monto,
-            null
+            Preference || null
         ]);
 
         const rows = result.rows || result;
