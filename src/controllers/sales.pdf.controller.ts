@@ -205,7 +205,7 @@ export class SalesPdfController {
         doc.fontSize(8).text(`Tipo: ${val(receta?.lejos?.tipo)}`, xTipo, currentY + 10);
 
         // Tratamiento Lejos (spans 2 rows)
-        doc.fontSize(8).text(`Trat.: ${val(receta?.lejos?.tratamiento)}`, xTratamiento, currentY + 10);
+        doc.fontSize(8).text(`Trat.: ${val(receta?.lejos?.color)}`, xTratamiento, currentY + 10);
 
         // DNP Lejos (spans 2 rows)
         doc.fontSize(7).text('DNP', xDNPLabel, currentY + 10, { align: 'center', width: 30 });
@@ -232,7 +232,7 @@ export class SalesPdfController {
         doc.fontSize(8).font('Helvetica').text(`Tipo: ${val(receta?.cerca?.tipo)}`, xTipo, currentY + 10);
 
         // Tratamiento Cerca (spans 2 rows)
-        doc.fontSize(8).font('Helvetica').text(`Trat.: ${val(receta?.cerca?.tratamiento)}`, xTratamiento, currentY + 10);
+        doc.fontSize(8).font('Helvetica').text(`Trat.: ${val(receta?.cerca?.color)}`, xTratamiento, currentY + 10);
 
         // DNP Cerca (spans 2 rows)
         doc.fontSize(7).text('DNP', xDNPLabel, currentY + 10, { align: 'center', width: 30 });
