@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PostgresDB } from '../database/postgres';
 import PDFDocument from 'pdfkit';
+import * as QRCode from 'qrcode';
 
 export class SalesPdfController {
     private static instance: SalesPdfController;
@@ -39,12 +40,19 @@ export class SalesPdfController {
             const abonado = pagos.reduce((acc: number, p: any) => acc + Number(p.monto), 0);
             const saldo = total - abonado;
 
+
             // 3. Receta (Buscamos la última del cliente)
             let receta: any = null;
             if (venta.cliente_id) {
                 const recetaResult = await db.callStoredProcedure('sp_prescripcion_get_ultima', [venta.cliente_id]);
                 receta = recetaResult.rows[0];
             }
+
+            const obraSocialRow = await PostgresDB.getInstance().callStoredProcedure('sp_obra_social_get_by_id', [venta.obra_social_id]);
+            const obraSocial = obraSocialRow.rows[0];
+
+            // 4. Generar QR
+            const qrCodeDataUrl = await QRCode.toDataURL(venta.venta_id || id);
 
             // Configurar PDF
             const doc = new PDFDocument({
@@ -59,7 +67,7 @@ export class SalesPdfController {
             doc.pipe(res);
 
             // Helpers de datos
-            const data = { venta, items, receta, total, abonado, saldo };
+            const data = { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl };
 
             // Dibujar Original (Parte Superior)
             // Reduced start Y from 40 to 30
@@ -83,8 +91,8 @@ export class SalesPdfController {
         }
     }
 
-    private drawTalon(doc: PDFKit.PDFDocument, startY: number, label: string, data: any) {
-        const { venta, items, receta, total, abonado, saldo } = data;
+    private async drawTalon(doc: PDFKit.PDFDocument, startY: number, label: string, data: any) {
+        const { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl } = data;
         const val = (v: any) => v ?? '';
         const money = (v: number) => `$ ${v.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
 
@@ -99,10 +107,15 @@ export class SalesPdfController {
         // --- HEADER ---
         // Col 1: Cliente Info
         doc.fontSize(10).font('Helvetica-Bold').text(`Cliente: ${clienteNombre}`, 40, y);
-        y += 14; // Reduced from 15
+        y += 14;
         doc.fontSize(8).font('Helvetica').text(`Domicilio: ${val(venta.cliente_direccion)}`, 40, y);
-        y += 11; // Reduced from 12
+        y += 11;
         doc.text(`Fecha Recibido: ${fechaRecibido}`, 40, y);
+
+        // QR Code
+        if (qrCodeDataUrl) {
+            doc.image(qrCodeDataUrl, 200, startY, { width: 50 });
+        }
 
         // Col 2: Logo (Centro)
         const logoY = startY;
@@ -115,8 +128,9 @@ export class SalesPdfController {
         doc.fontSize(8).font('Helvetica').text(`Tel: ${val(venta.cliente_telefono)}`, col3X, yRight, { align: 'right', width: 155 });
         // yRight += 11; // Reduced from 12
         // doc.font('Helvetica-Bold').text(`Prometido: ${val(venta.fecha_entrega_estimada)}`, col3X, yRight, { align: 'right', width: 155 });
+
         yRight += 11;
-        doc.font('Helvetica').text(`Obra Social: ${val(receta?.obraSocial || 'Sin obra social')}`, col3X, yRight, { align: 'right', width: 155 });
+        doc.font('Helvetica').text(`Obra Social: ${val(obraSocial || 'Sin obra social')}`, col3X, yRight, { align: 'right', width: 155 });
 
         y = Math.max(y, logoY + 30) + 8; // Compacted slightly
 
