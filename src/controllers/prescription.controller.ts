@@ -195,45 +195,35 @@ export class PrescriptionController {
       if (!vendedor_id || !sucursal_id) {
         console.error("Missing user context for auto-sale creation");
       } else {
-        // sp_venta_crear(vendedor, cliente, sucursal, urgente, descuento)
+        // A. [NUEVO] Resolver el UUID de la Obra Social si viene un nombre (ej: 'PAMI')
+        let finalObraSocialId = null;
+        if (obraSocial) {
+          const osResult = await PostgresDB.getInstance()
+            .callStoredProcedure('sp_obra_social_get_by_nombre', [obraSocial]);
+          console.log(osResult);
+          finalObraSocialId = osResult.rows[0]?.obra_social_id || null;
+        }
+
+        // B. [ACTUALIZADO] Llamada a sp_venta_crear con 7 parámetros
         const ventaResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_crear', [
           vendedor_id,
           finalClienteId,
           sucursal_id,
-          false,
-          descuento || 0
+          false,            // urgente
+          descuento || 0,   // descuento
+          JSON.stringify(items || []), // 6. items (el SP ahora los procesa internamente)
+          finalObraSocialId // 7. obra_social_id (UUID)
         ]);
+        console.log(ventaResult);
+        // C. [LIMPIEZA] Ya no necesitas el bucle 'for' de sp_venta_item_agregar 
+        // porque el SP 'sp_venta_crear' ya calculó el total e insertó el ticket.
 
-        // Extract ID securely
-        // Accedemos a .rows porque el wrapper devuelve un objeto Result, no un array directo
-        const ventaData = ventaResult.rows?.[0]?.sp_venta_crear || ventaResult.rows?.[0] || {};
+        const ventaData = ventaResult.rows?.[0] || {};
         const venta_id = ventaData.venta_id;
 
-        console.log("Venta ID recuperado:", venta_id);
+        console.log("Venta y Ticket creados automáticamente. ID:", venta_id);
 
-        let itemsToInsert = items;
-        if (typeof itemsToInsert === 'string') {
-          try {
-            itemsToInsert = JSON.parse(itemsToInsert);
-          } catch (error) {
-            console.error("Error parsing items:", error);
-            itemsToInsert = [];
-          }
-        }
-
-        if (itemsToInsert && Array.isArray(itemsToInsert) && venta_id) {
-          for (const item of itemsToInsert) {
-            console.log("insertando item:", item.producto_id, "precio:", item.precio_unitario);
-            await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_agregar', [
-              venta_id,
-              item.producto_id,
-              item.cantidad,
-              item.precio_unitario
-            ]);
-          }
-        }
-
-        // 5. Verificar Total
+        // 5. Verificar Total (Esto se mantiene igual para confirmar el cálculo de la DB)
         const totalResult = await PostgresDB.getInstance().callStoredProcedure('sp_venta_get_by_id', [venta_id]);
         const total_confirmado = totalResult.rows[0]?.total || 0;
 
@@ -243,8 +233,6 @@ export class PrescriptionController {
           venta_id,
           total_confirmado
         });
-
-
       }
 
       res.json({
