@@ -29,7 +29,7 @@ export class TicketsController {
                 fecha_entrega_estimada,
                 notas || ''
             ]);
-
+            console.log(result);
             // AUTO-SET a 'LISTO' (Requerimiento especial)
             const ticketId = result.rows ? result.rows[0]?.ticket_id : (result[0]?.ticket_id || result.ticket_id);
             if (ticketId) {
