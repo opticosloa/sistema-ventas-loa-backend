@@ -17,7 +17,8 @@ interface ClosureData {
     efectivo_fisico: number;             // Physical Cash Counted
 
     // Calculated
-    diferencia: number;
+    diferencia_global: number;      // Global Diff (Total Real - System)
+    diferencia_efectivo: number;    // Cash Diff (Physical - Expected)
 
     // Withdrawals
     monto_remanente: number;
@@ -27,7 +28,7 @@ interface ClosureData {
     detalle_metodos: Record<string, number>;
 
     // OS
-    liquidaciones: { obra_social: string; total: number; estado: string }[];
+    liquidaciones?: { obra_social: string; total: number; estado: string }[];
 }
 
 export class CashPdfService {
@@ -100,9 +101,8 @@ export class CashPdfService {
             doc.moveDown(0.5);
             printRow('Efectivo Físico Declarado:', data.efectivo_fisico);
 
-            // Diferencia logic
-            // Diff = Fisico - Esperado
-            const cashDiff = data.efectivo_fisico - expectedCash;
+            // Diferencia logic (Use SP provided value)
+            const cashDiff = Number(data.diferencia_efectivo);
             const color = cashDiff === 0 ? 'black' : (cashDiff < 0 ? 'red' : 'green');
 
             doc.fillColor(color);

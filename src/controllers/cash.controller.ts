@@ -44,8 +44,14 @@ export class CashController {
         try {
             const sucursal_id = req.user?.sucursal_id;
             const usuario_id = req.user?.id;
-            // Updated to receive monto_remanente
-            const { monto_real, observaciones, monto_remanente } = req.body;
+
+            // Recibimos los inputs del usuario y el total calculado
+            const {
+                monto_real,        // Total Global (Efectivo Físico + Otros Medios)
+                observaciones,
+                monto_remanente,   // Lo que queda en caja
+                efectivo_fisico    // Billetes contados
+            } = req.body;
 
             if (!sucursal_id || !usuario_id) {
                 return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -69,7 +75,8 @@ export class CashController {
             // Append context to observations
             const finalObservaciones = (observaciones || "") + dolarContext;
 
-            // 2. Call Updated SP
+            // 2. Call New SP (6 parameters)
+            // p_sucursal_id, p_usuario_id, p_monto_real, p_observaciones, p_monto_remanente, p_efectivo_fisico
             const result = await PostgresDB.getInstance().callStoredProcedure(
                 'sp_caja_ejecutar_cierre',
                 [
@@ -77,57 +84,95 @@ export class CashController {
                     usuario_id,
                     monto_real,
                     finalObservaciones,
-                    monto_remanente || 0 // Default 0 if not provided
+                    monto_remanente || 0,
+                    efectivo_fisico || 0
                 ]
             );
 
-            const closureData = result.rows[0];
-            console.log(req.user);
-            // 3. Generate PDF
-            const { CashPdfService } = await import('../services/cash.pdf.service');
-            const pdfBuffer = await CashPdfService.generateClosingReport({
-                ...closureData,
-                sucursal: req.user?.sucursal_nombre || 'Sucursal', // Assuming user object has name, or we fetch it.
-                cajero: req.user?.username || 'Usuario', // Assuming user object has username
-                fecha_apertura: closureData.o_fecha_apertura || new Date().toISOString(), // Adjust if SP outputs simplified names
-                cierre_id: closureData.o_cierre_id,
-                monto_sistema: closureData.o_monto_sistema,
-                monto_real: monto_real,
-                diferencia: closureData.o_diferencia,
-                observaciones: finalObservaciones,
-                monto_remanente: monto_remanente || 0,
-                monto_extraccion: (Number(monto_real) - (Number(monto_remanente) || 0)),
-                fecha_cierre: closureData.o_fecha_cierre,
-                detalle_metodos: {} // Need to fetch detailed breakdown? SP stores it in 'detalle_metodos' column of table, but usually returns simplified.
-                // Actually the SP returns only few columns. WE SHOULD UPDATE SP TO RETURN MORE DATA OR FETCH IT.
-                // For now, let's rely on what SP returns. 
-                // Wait, the SP inserts into DB. We can fetch the inserted row or update SP to return the json.
-                // The updated SP returns: o_cierre_id, o_monto_sistema, o_diferencia, o_fecha_cierre.
-                // Missing: detalle_metodos. 
-                // I will Fetch the full closure record to be safe for the PDF.
-            });
+            // The SP returns: o_cierre_id, o_monto_sistema, o_diferencia, o_fecha_cierre, o_fondo_inicial, o_diferencia_efectivo
+            const spResult = result.rows[0];
 
-            // 3.5 Fetch full data for PDF (Robustness)
-            const fullClosureResult = await PostgresDB.getInstance().executeQuery(
+            if (!spResult || !spResult.o_cierre_id) {
+                throw new Error("El procedimiento almacenado no retornó un ID de cierre válido.");
+            }
+
+            // 3. Fetch Full Closure Data (Source of Truth for PDF)
+            // Necesitamos 'detalle_metodos' y otros campos que el SP guardó en la tabla.
+            const fullClosureQuery = await PostgresDB.getInstance().executeQuery(
                 `SELECT * FROM cierres_caja WHERE cierre_id = $1`,
-                [closureData.o_cierre_id]
+                [spResult.o_cierre_id]
             );
-            const fullData = fullClosureResult.rows[0];
+            const fullData = fullClosureQuery.rows[0];
 
-            // Re-Generate with full data
-            const finalPdfBuffer = await CashPdfService.generateClosingReport({
-                ...fullData,
+            if (!fullData) {
+                throw new Error("No se pudo recuperar el registro de cierre creado.");
+            }
+
+            // 4. Generate PDF
+            const { CashPdfService } = await import('../services/cash.pdf.service');
+
+            // Mapeamos los datos para el servicio de PDF
+            // Usamos los valores retornados por el SP para las diferencias calculadas en el momento exacto
+            const pdfBuffer = await CashPdfService.generateClosingReport({
+                ...fullData, // Trae monto_sistema, monto_real, detalle_metodos, monto_extraccion, monto_remanente
                 sucursal: req.user?.sucursal_nombre || 'Sucursal',
-                cajero: req.user?.username || 'Usuario'
+                cajero: req.user?.username || 'Usuario',
+
+                // Sobrescribir/Asegurar campos especificos del reporte
+                fecha_cierre: spResult.o_fecha_cierre,
+                fondo_inicial: Number(spResult.o_fondo_inicial),
+
+                // Diferencias calculadas por el SP
+                diferencia_global: Number(spResult.o_diferencia),
+                diferencia_efectivo: Number(spResult.o_diferencia_efectivo),
+
+                // Inputs especificos
+                efectivo_fisico: Number(efectivo_fisico || 0),
+
+                // Obras Sociales (Liquidaciones Borrador)
+                // El SP genera liquidaciones, podemos intentar recuperarlas o dejarlas vacias si no es critico listarlas DETALLADAMENTE en el pdf de caja
+                // El requerimiento dice: "Listar las liquidaciones generadas en estado BORRADOR"
+                // Consultamos las liquidaciones vinculadas a este cierre? 
+                // El SP pone en observaciones de liquidacion: 'Generado automaticamente al Cierre de Caja ' || v_cierre_id
+                // O podemos consultar por fecha y estado BORRADOR y user? 
+                // Mejor: Consultar liquidaciones creadas en este 'instante' o usar un query especifico.
+                // Dado que el SP no retorna los IDs de liquidaciones, haremos un query helper.
             });
 
+            // 4.5 Fetch Liquidations for PDF (Optional improvement based on req)
+            // El servicio PDF espera 'liquidaciones' en el objeto data si lo modificamos.
+            // Vamos a hacerlo bien.
+            const liquidacionesQuery = await PostgresDB.getInstance().executeQuery(
+                `SELECT os.nombre as obra_social, l.total_declarado as total, l.estado 
+                 FROM liquidaciones l
+                 JOIN obras_sociales os ON l.obra_social_id = os.obra_social_id
+                 WHERE l.observaciones LIKE $1`,
+                [`%${spResult.o_cierre_id}%`]
+            );
 
-            // 4. Return PDF Stream
+            // Regenerar PDF con liquidaciones si existen
+            if (liquidacionesQuery.rows.length > 0) {
+                const pdfBufferWithLiq = await CashPdfService.generateClosingReport({
+                    ...fullData,
+                    sucursal: req.user?.sucursal_nombre || 'Sucursal',
+                    cajero: req.user?.username || 'Usuario',
+                    fecha_cierre: spResult.o_fecha_cierre,
+                    fondo_inicial: Number(spResult.o_fondo_inicial),
+                    diferencia_global: Number(spResult.o_diferencia),
+                    diferencia_efectivo: Number(spResult.o_diferencia_efectivo),
+                    efectivo_fisico: Number(efectivo_fisico || 0),
+                    liquidaciones: liquidacionesQuery.rows
+                });
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', `attachment; filename=Cierre_${spResult.o_cierre_id}.pdf`);
+                res.send(pdfBufferWithLiq);
+                return;
+            }
+
+            // Return PDF Stream (Sin liquidaciones extras si no hubo)
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=Cierre_${closureData.o_cierre_id}.pdf`);
-            res.send(finalPdfBuffer);
-
-            // Note: Frontend should handle blob response.
+            res.setHeader('Content-Disposition', `attachment; filename=Cierre_${spResult.o_cierre_id}.pdf`);
+            res.send(pdfBuffer);
 
         } catch (error: any) {
             console.error("Error performing cash closing:", error);
