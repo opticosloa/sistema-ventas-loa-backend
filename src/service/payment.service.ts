@@ -35,7 +35,6 @@ export class PaymentService {
             venta_id,
             metodo,
             monto,
-            null,
             referencia
         ]);
 
