@@ -29,9 +29,11 @@ export class TicketsController {
                 fecha_entrega_estimada,
                 notas || ''
             ]);
-            console.log(result);
+
+            const row = result.rows ? result.rows[0] : (Array.isArray(result) ? result[0] : result);
+            const ticketId = row?.ticket_id || row?.sp_ticket_crear;
+
             // AUTO-SET a 'LISTO' (Requerimiento especial)
-            const ticketId = result.rows ? result.rows[0]?.ticket_id : (result[0]?.ticket_id || result.ticket_id);
             if (ticketId) {
                 await PostgresDB.getInstance().callStoredProcedure('sp_ticket_cambiar_estado', [
                     ticketId,
