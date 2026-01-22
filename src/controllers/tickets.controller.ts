@@ -29,6 +29,17 @@ export class TicketsController {
                 fecha_entrega_estimada,
                 notas || ''
             ]);
+
+            // AUTO-SET a 'LISTO' (Requerimiento especial)
+            const ticketId = result.rows ? result.rows[0]?.ticket_id : (result[0]?.ticket_id || result.ticket_id);
+            if (ticketId) {
+                await PostgresDB.getInstance().callStoredProcedure('sp_ticket_cambiar_estado', [
+                    ticketId,
+                    'LISTO',
+                    'Estado inicial automático'
+                ]);
+            }
+
             res.status(201).json({ success: true, result: result.rows ? result.rows[0] : result });
         } catch (error: any) {
             console.error('Error creating ticket:', error);
