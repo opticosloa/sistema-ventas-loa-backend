@@ -26,17 +26,17 @@ export class PaymentService {
      * Internal helper to create a payment record in DB via SP.
      * Reused by all payment creation methods.
      */
-    private async _createPaymentInDB(venta_id: string, metodo: string, monto: number): Promise<string> {
+    private async _createPaymentInDB(venta_id: string, metodo: string, monto: number, referencia: string | null = null): Promise<string> {
         // Log de seguridad
-        console.log("Registrando pago en DB:", { venta_id, metodo, monto });
+        console.log("Registrando pago en DB:", { venta_id, metodo, monto, referencia });
 
-        // sp_pago_crear(venta_id, metodo, monto, estado?)
-        // Assuming SP handles the 'null' as default/pending status.
+        // sp_pago_crear(venta_id, metodo, monto, estado?, referencia?)
         const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_pago_crear', [
             venta_id,
             metodo,
             monto,
-            null
+            null,
+            referencia
         ]);
 
         const rows = result.rows || result;
@@ -490,9 +490,9 @@ export class PaymentService {
         }
     }
 
-    public async createManualPayment(venta_id: string, metodo: string, monto: number) {
+    public async createManualPayment(venta_id: string, metodo: string, monto: number, referencia: string | null = null) {
         // 1. Create Payment
-        const pago_id = await this._createPaymentInDB(venta_id, metodo, monto);
+        const pago_id = await this._createPaymentInDB(venta_id, metodo, monto, referencia);
 
         // 2. Confirm Payment immediately
         await PostgresDB.getInstance().callStoredProcedure('sp_pago_confirmar', [pago_id]);

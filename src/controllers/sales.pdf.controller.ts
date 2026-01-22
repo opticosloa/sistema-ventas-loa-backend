@@ -132,7 +132,10 @@ export class SalesPdfController {
         yRight += 11;
         doc.font('Helvetica').text(`Obra Social: ${val(obraSocial || 'Sin obra social')}`, col3X, yRight, { align: 'right', width: 155 });
 
-        y = Math.max(y, logoY + 30) + 8; // Compacted slightly
+        // Calculate Y based on content AND QR code height (50)
+        // Ensure we have at least startY + 50 + padding
+        const qrHeight = qrCodeDataUrl ? 55 : 0;
+        y = Math.max(y, logoY + 30, startY + qrHeight) + 8;
 
         // Línea separadora header
         doc.moveTo(40, y).lineTo(555, y).lineWidth(0.5).stroke();

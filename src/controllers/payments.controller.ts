@@ -124,7 +124,8 @@ export class PaymentsController {
                 const resPago = await PaymentService.getInstance().createManualPayment(
                     venta_id,
                     p.metodo,
-                    p.monto
+                    p.monto,
+                    p.referencia || null
                 );
                 resultados.push(resPago);
             }
