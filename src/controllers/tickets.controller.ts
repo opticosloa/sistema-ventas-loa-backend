@@ -55,9 +55,11 @@ export class TicketsController {
         try {
             let filterSucursalId: string | null = null;
 
-            // Determinar el rol (ajustar segun los roles reales de tu sistema)
-            const isAdmin = user?.rol === 'ADMIN' || user?.rol === 'SUPERADMIN';
+            filterSucursalId = null;
 
+            /* Lógica anterior comentada por requerimiento:
+            const isAdmin = user?.rol === 'ADMIN' || user?.rol === 'SUPERADMIN';
+            
             if (isAdmin) {
                 // Si es admin, usa el query param si existe, sino null (todas)
                 filterSucursalId = (sucursal_id as string) || null;
@@ -65,6 +67,7 @@ export class TicketsController {
                 // Si no es admin, fuerza su sucursal
                 filterSucursalId = user?.sucursal_id || null;
             }
+            */
 
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_ticket_listar', [
                 filterSucursalId,
