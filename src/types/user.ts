@@ -15,4 +15,5 @@ export interface User {
     direccion?: string;
     fecha_nacimiento?: string;
     cuenta_corriente?: number;
+    max_descuento?: number;
 }

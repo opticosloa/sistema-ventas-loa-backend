@@ -27,7 +27,21 @@ export class UsersController {
     }
 
     public async createUser(req: Request, res: Response) {
-        const { nombre, apellido, email, password_hash, rol, is_active, sucursal_id, cuit, telefono, direccion, fecha_nacimiento, cuenta_corriente }: User = req.body;
+        const {
+            nombre,
+            apellido,
+            email,
+            password_hash,
+            rol,
+            is_active,
+            sucursal_id,
+            cuit,
+            telefono,
+            direccion,
+            fecha_nacimiento,
+            cuenta_corriente,
+            max_descuento
+        }: User = req.body;
 
         try {
             let emailUpper = email.toUpperCase();
@@ -46,13 +60,18 @@ export class UsersController {
                 telefono,
                 direccion,
                 fecha_nacimiento,
-                cuenta_corriente || 0
+                cuenta_corriente || 0,
+                max_descuento || 0
             ]);
 
             const user = result.rows[0];
-            const token = jwt.sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre, apellido: user.apellido, sucursal_id: user.sucursal_id }, envs.JWT_SECRET, { expiresIn: '16h' });
+            // const token = jwt.sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre, apellido: user.apellido, sucursal_id: user.sucursal_id }, envs.JWT_SECRET, { expiresIn: '16h' });
 
-            res.json({ success: true, result, token });
+            res.json({
+                success: true,
+                message: "Empleado creado exitosamente",
+                result: user
+            });
         } catch (error) {
             console.log(error);
             res.status(500).json({ success: false, error });
