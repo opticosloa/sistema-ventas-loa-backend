@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { PostgresDB } from '../database/postgres';
 import { ObraSocial } from '../types/obrasSociales';
+import { ObrasSocialesService } from '../service/obras_sociales.service';
+
 
 export class ObrasSocialesController {
     private static instance: ObrasSocialesController;
@@ -40,24 +42,31 @@ export class ObrasSocialesController {
     }
 
     public async upsert(req: Request, res: Response) {
-        // Expecting body: { obra_social_id, nombre, plan, sitio_web, instrucciones, activo, cobertura }
-        const { obra_social_id, nombre, plan, sitio_web, instrucciones, activo, cobertura }: ObraSocial = req.body;
+        // Extraemos los datos del body
+        const data = req.body;
 
-        if (!nombre) {
+        if (!data.nombre) {
             return res.status(400).json({ success: false, error: "Nombre es requerido" });
         }
 
         try {
-            const result = await PostgresDB.getInstance().callStoredProcedure('sp_obra_social_upsert', [
-                obra_social_id || null, // 1. id
-                nombre,                 // 2. nombre
-                plan || null,           // 3. plan
-                sitio_web || null,      // 4. sitio_web
-                instrucciones || null,  // 5. instrucciones
-                activo !== undefined ? activo : true, // 6. activo
-                cobertura ? JSON.stringify(cobertura) : null // 7. cobertura (JSON) - pg driver handles object usually, but explicit stringify or passing object depends on setup. User said "enviarlo ... como JSON stringificado o usar el driver ... que maneja JSONB". Passing object usually works with node-postgres if it's JSONB. I'll pass object first, if fails I'll stringify. Actually user said "driver de pg que maneja JSONB automáticamente". So I will pass the object directly.
-            ]);
-            res.json({ success: true, result: result.rows[0] });
+            // Construimos el objeto asegurando tipos y valores por defecto
+            const payload: ObraSocial = {
+                obra_social_id: data.obra_social_id || undefined, // Si viene vacío, que sea undefined
+                nombre: data.nombre,
+                plan: data.plan || '',
+                sitio_web: data.sitio_web || '',
+                instrucciones: data.instrucciones || '',
+                activo: data.activo !== undefined ? data.activo : true,
+                cobertura: data.cobertura || { porcentaje_cristales: 0, porcentaje_armazones: 0 },
+                monto_cobertura_total: Number(data.monto_cobertura_total) || 0,
+                cobertura_armazon_max: Number(data.cobertura_armazon_max) || 0,
+                cobertura_cristal_max: Number(data.cobertura_cristal_max) || 0,
+            };
+
+            const result = await ObrasSocialesService.getInstance().upsert(payload);
+
+            res.json({ success: true, result });
         } catch (error: any) {
             console.error("Error upserting Obra Social:", error);
             res.status(500).json({ success: false, error: error.message });
