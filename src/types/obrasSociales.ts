@@ -5,6 +5,7 @@ export interface ObraSocial {
     sitio_web?: string; // Optional
     instrucciones?: string; // Optional
     activo?: boolean;
+    monto_cobertura_total?: number;
     cobertura?: {
         porcentaje_cristales: number;
         porcentaje_armazones: number;

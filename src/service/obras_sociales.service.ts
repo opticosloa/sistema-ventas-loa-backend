@@ -1,12 +1,6 @@
 import { PostgresDB } from "../database/postgres";
+import { ObraSocial } from "../types/obrasSociales";
 
-export interface ObraSocial {
-    obra_social_id?: number;
-    nombre: string;
-    sitio_web?: string;
-    instrucciones?: string;
-    activo: boolean;
-}
 
 export class ObrasSocialesService {
     private static instance: ObrasSocialesService;
@@ -36,7 +30,8 @@ export class ObrasSocialesService {
             data.nombre,
             data.sitio_web || null,
             data.instrucciones || null,
-            data.activo
+            data.activo,
+            data.monto_cobertura_total || 0
         ]);
         return result.rows[0];
     }
