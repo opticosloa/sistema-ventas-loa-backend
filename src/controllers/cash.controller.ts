@@ -108,6 +108,12 @@ export class CashController {
                 throw new Error("No se pudo recuperar el registro de cierre creado.");
             }
 
+            console.log("=== DEBUG CASH CLOSING ===");
+            console.log("SP Result:", spResult);
+            console.log("Full Data from DB:", fullData);
+            console.log("Detalle Metodos (DB JSON):", fullData.detalle_metodos);
+            console.log("==========================");
+
             // 4. Generate PDF
             const { CashPdfService } = await import('../service/cash.pdf.service');
 

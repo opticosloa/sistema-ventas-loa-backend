@@ -34,6 +34,10 @@ interface ClosureData {
 export class CashPdfService {
 
     public static async generateClosingReport(data: ClosureData): Promise<Buffer> {
+        console.log("=== PDF SERVICE DATA RECEIVED ===");
+        console.log("Detalle Metodos:", data.detalle_metodos);
+        console.log("Monto Extraccion:", data.monto_extraccion);
+        console.log("=================================");
         return new Promise((resolve, reject) => {
             const doc = new PDFDocument({ margin: 50, size: 'A4' });
             const buffers: Buffer[] = [];
