@@ -43,10 +43,20 @@ export class SalesPdfController {
 
             // 3. Receta (Buscamos la última del cliente)
             let receta: any = null;
+            let cliente: any = null;
+            let ticket: any = null;
+
             if (venta.cliente_id) {
                 const recetaResult = await db.callStoredProcedure('sp_prescripcion_get_ultima', [venta.cliente_id]);
                 receta = recetaResult.rows[0];
+
+                const clienteResult = await db.callStoredProcedure('sp_cliente_get_by_id', [venta.cliente_id]);
+                cliente = clienteResult.rows[0];
             }
+
+            // Buscar Ticket
+            const ticketResult = await db.executeQuery('SELECT * FROM tickets WHERE venta_id = $1 LIMIT 1', [id]);
+            ticket = ticketResult.rows[0];
 
             // 4. Obra Social Logic
             let obraSocial: any = null;
@@ -87,7 +97,7 @@ export class SalesPdfController {
             doc.pipe(res);
 
             // Helpers de datos
-            const data = { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl };
+            const data = { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl, cliente, ticket };
 
             // Dibujar Original (Parte Superior)
             // Reduced start Y from 40 to 30
@@ -112,12 +122,14 @@ export class SalesPdfController {
     }
 
     private async drawTalon(doc: PDFKit.PDFDocument, startY: number, label: string, data: any) {
-        const { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl } = data;
+        const { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl, cliente, ticket } = data;
         const val = (v: any) => v ?? '';
         const money = (v: number) => `$ ${v.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
 
         const clienteNombre = `${venta.cliente_apellido || ''} ${venta.cliente_nombre || ''}`.trim();
         const fechaRecibido = new Date(venta.created_at).toLocaleDateString('es-AR');
+        const fechaPrometido = ticket?.fecha_entrega_estimada ? new Date(ticket.fecha_entrega_estimada).toLocaleDateString('es-AR') : '---';
+
         const armazonNombre = items.find((i: any) =>
             (i.categoria === 'ARMAZON') || (i.producto_nombre || '').toLowerCase().includes('armaz')
         )?.producto_nombre || '---';
@@ -128,9 +140,13 @@ export class SalesPdfController {
         // Col 1: Cliente Info
         doc.fontSize(10).font('Helvetica-Bold').text(`Cliente: ${clienteNombre}`, 40, y);
         y += 14;
-        doc.fontSize(8).font('Helvetica').text(`Domicilio: ${val(venta.cliente_direccion)}`, 40, y);
-        y += 11;
-        doc.text(`Fecha Recibido: ${fechaRecibido}`, 40, y);
+
+        if (label !== 'ORIGINAL') {
+            doc.fontSize(8).font('Helvetica').text(`Domicilio: ${val(cliente?.direccion || venta.cliente_direccion)}`, 40, y);
+            y += 11;
+        }
+
+        doc.fontSize(8).font('Helvetica').text(`Fecha Recibido: ${fechaRecibido}`, 40, y);
 
         // QR Code
         if (qrCodeDataUrl) {
@@ -145,9 +161,11 @@ export class SalesPdfController {
         // Col 3: Datos Venta (Derecha)
         const col3X = 400;
         let yRight = startY;
-        doc.fontSize(8).font('Helvetica').text(`Tel: ${val(venta.cliente_telefono)}`, col3X, yRight, { align: 'right', width: 155 });
-        // yRight += 11; // Reduced from 12
-        // doc.font('Helvetica-Bold').text(`Prometido: ${val(venta.fecha_entrega_estimada)}`, col3X, yRight, { align: 'right', width: 155 });
+        doc.fontSize(8).font('Helvetica').text(`Tel: ${val(cliente?.telefono || venta.cliente_telefono)}`, col3X, yRight, { align: 'right', width: 155 });
+        yRight += 11;
+        doc.font('Helvetica-Bold').text(`Prometido: ${fechaPrometido}`, col3X, yRight, { align: 'right', width: 155 });
+        doc.font('Helvetica-Bold').text(`DNI: ${val(cliente?.dni || venta.cliente_dni)}`, col3X, yRight + 11, { align: 'right', width: 155 });
+        yRight += 11; // Add extra space for DNI
 
         yRight += 11;
         doc.font('Helvetica').text(`Obra Social: ${val(obraSocial?.nombre || 'Sin obra social')}`, col3X, yRight, { align: 'right', width: 155 });
