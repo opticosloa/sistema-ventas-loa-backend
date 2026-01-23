@@ -31,7 +31,8 @@ export class ObrasSocialesService {
             data.sitio_web || null,
             data.instrucciones || null,
             data.activo,
-            data.monto_cobertura_total || 0
+            data.monto_cobertura_total || 0,
+            JSON.stringify(data.cobertura || {}) // Ensure cobertura is passed as JSON
         ]);
         return result.rows[0];
     }

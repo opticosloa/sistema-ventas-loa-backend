@@ -109,7 +109,7 @@ export class CashController {
             }
 
             // 4. Generate PDF
-            const { CashPdfService } = await import('../services/cash.pdf.service');
+            const { CashPdfService } = await import('../service/cash.pdf.service');
 
             // Mapeamos los datos para el servicio de PDF
             // Usamos los valores retornados por el SP para las diferencias calculadas en el momento exacto
