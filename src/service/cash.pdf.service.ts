@@ -9,11 +9,11 @@ interface ClosureData {
 
     // Totals
     monto_sistema: number;     // Total System (All methods)
-    monto_real_total: number;  // Total Declared (All methods)
+    monto_real: number;        // Total Declared (All methods)
 
     // Cash Specifics
     fondo_inicial: number;
-    imputacion_efectivo_sistema: number; // Cash Sales only
+    imputacion_efectivo_sistema?: number; // Cash Sales only (Optional, derived from json)
     efectivo_fisico: number;             // Physical Cash Counted
 
     // Calculated
