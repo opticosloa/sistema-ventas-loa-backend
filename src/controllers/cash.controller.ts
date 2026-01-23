@@ -113,8 +113,22 @@ export class CashController {
 
             // Mapeamos los datos para el servicio de PDF
             // Usamos los valores retornados por el SP para las diferencias calculadas en el momento exacto
+
+            // Construir detalle_metodos a partir de las columnas planas de la tabla (inferred from CashSummary)
+            const detalle_metodos = {
+                'EFECTIVO': Number(fullData.total_efectivo || 0),
+                'ELECTRONICO': Number(fullData.total_electronico || 0),
+                'OBRA SOCIAL': Number(fullData.total_obra_social || 0),
+                // Add others if column exists, e.g. 'TARJETA': Number(fullData.total_tarjeta || 0)
+            };
+
+            const monto_extraccion = Number(efectivo_fisico || 0) - Number(monto_remanente || 0);
+
             const pdfBuffer = await CashPdfService.generateClosingReport({
                 ...fullData, // Trae monto_sistema, monto_real, detalle_metodos, monto_extraccion, monto_remanente
+                detalle_metodos, // Override with constructed object
+                monto_extraccion,
+
                 sucursal: req.user?.sucursal_nombre || 'Sucursal',
                 cajero: req.user?.username || 'Usuario',
 
