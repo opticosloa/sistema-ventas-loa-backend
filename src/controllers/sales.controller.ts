@@ -48,6 +48,11 @@ export class SalesController {
                 throw new Error("No se pudo obtener el ID de la venta creada");
             }
 
+            // Ticket is created by SP but Direct Sales should not have one.
+            // We delete it immediately.
+            await PostgresDB.getInstance().executeQuery('DELETE FROM tickets WHERE venta_id = $1', [venta_id]);
+
+
             // Loop removed: sp_venta_crear already inserts items from the JSON payload.
 
             // Verificar Total Confirmado
