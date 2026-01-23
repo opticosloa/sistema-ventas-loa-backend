@@ -66,9 +66,20 @@ export class CashPdfService {
             const printRow = (label: string, value: any, bold = false, indent = 0) => {
                 doc.x = col1 + indent;
                 if (bold) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
-                doc.text(label, { continued: true });
-                doc.x = colValue;
-                doc.text(typeof value === 'number' ? `$ ${value.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : value, { align: 'right' });
+
+                const currentY = doc.y;
+                doc.text(label, col1 + indent, currentY);
+
+                // Align value properly without 'continued'
+                // Value column area width
+                const valueWidth = doc.page.width - colValue - 50;
+                doc.text(
+                    typeof value === 'number' ? `$ ${value.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : value,
+                    colValue,
+                    currentY,
+                    { align: 'right', width: valueWidth }
+                );
+
                 doc.font('Helvetica');
             };
 
