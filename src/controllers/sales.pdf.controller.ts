@@ -48,10 +48,30 @@ export class SalesPdfController {
                 receta = recetaResult.rows[0];
             }
 
-            const obraSocialRow = await PostgresDB.getInstance().callStoredProcedure('sp_obra_social_get_by_id', [venta.obra_social_id]);
-            const obraSocial = obraSocialRow.rows[0];
+            // 4. Obra Social Logic
+            let obraSocial: any = null;
+            let obraSocialId = venta.obra_social_id;
 
-            // 4. Generar QR
+            // If not in sale, check payments for reference "ID_OS: ..."
+            if (!obraSocialId && pagos.length > 0) {
+                const osPayment = pagos.find((p: any) => p.metodo === 'OBRA_SOCIAL');
+                if (osPayment && osPayment.referencia) {
+                    const match = osPayment.referencia.match(/ID_OS:\s*([^\s|]+)/);
+                    if (match && match[1]) {
+                        obraSocialId = match[1];
+                    }
+                }
+            }
+
+            if (obraSocialId) {
+                const obraSocialRow = await PostgresDB.getInstance().callStoredProcedure('sp_obra_social_get_by_id', [obraSocialId]);
+                obraSocial = obraSocialRow.rows[0].nombre;
+            } else if (receta && receta.obra_social) {
+                // Fallback to text in prescription if available
+                obraSocial = { nombre: receta.obra_social };
+            }
+
+            // 5. Generar QR
             const qrCodeDataUrl = await QRCode.toDataURL(venta.venta_id || id);
 
             // Configurar PDF
@@ -130,7 +150,7 @@ export class SalesPdfController {
         // doc.font('Helvetica-Bold').text(`Prometido: ${val(venta.fecha_entrega_estimada)}`, col3X, yRight, { align: 'right', width: 155 });
 
         yRight += 11;
-        doc.font('Helvetica').text(`Obra Social: ${val(obraSocial || 'Sin obra social')}`, col3X, yRight, { align: 'right', width: 155 });
+        doc.font('Helvetica').text(`Obra Social: ${val(obraSocial?.nombre || 'Sin obra social')}`, col3X, yRight, { align: 'right', width: 155 });
 
         // Calculate Y based on content AND QR code height (50)
         // Ensure we have at least startY + 50 + padding
