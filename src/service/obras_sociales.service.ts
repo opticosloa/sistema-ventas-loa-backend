@@ -26,13 +26,16 @@ export class ObrasSocialesService {
     public async upsert(data: ObraSocial) {
         // sp_obra_social_upsert(id, nombre, sitio, instrucciones, activo)
         const result = await PostgresDB.getInstance().callStoredProcedure('sp_obra_social_upsert', [
-            data.obra_social_id || null, // null for create
-            data.nombre,
-            data.sitio_web || null,
-            data.instrucciones || null,
-            data.activo,
-            data.monto_cobertura_total || 0,
-            JSON.stringify(data.cobertura || {}) // Ensure cobertura is passed as JSON
+            data.obra_social_id || null, // 1. p_id
+            data.nombre,                 // 2. p_nombre
+            data.plan || null,           // 3. p_plan
+            data.sitio_web || null,      // 4. p_sitio_web
+            data.instrucciones || null,  // 5. p_instrucciones
+            data.activo,                 // 6. p_activo
+            JSON.stringify(data.cobertura || {}), // 7. p_cobertura
+            data.cobertura_armazon_max || 0, // 8. p_cobertura_armazon_max
+            data.cobertura_cristal_max || 0, // 9. p_cobertura_cristal_max
+            data.monto_cobertura_total || 0  // 10. p_monto_cobertura_total
         ]);
         return result.rows[0];
     }
