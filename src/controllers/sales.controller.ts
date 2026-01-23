@@ -48,16 +48,7 @@ export class SalesController {
                 throw new Error("No se pudo obtener el ID de la venta creada");
             }
 
-            if (items && Array.isArray(items)) {
-                for (const item of items) {
-                    await PostgresDB.getInstance().callStoredProcedure('sp_venta_item_agregar', [
-                        venta_id,
-                        item.producto_id,
-                        item.cantidad,
-                        item.precio_unitario
-                    ]);
-                }
-            }
+            // Loop removed: sp_venta_crear already inserts items from the JSON payload.
 
             // Verificar Total Confirmado
             const totalResult = await PostgresDB.getInstance().callStoredProcedure('sp_venta_get_by_id', [venta_id]);
