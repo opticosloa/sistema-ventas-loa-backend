@@ -50,10 +50,7 @@ export class SalesController {
 
             // Ticket is created by SP but Direct Sales should not have one.
             // We delete it immediately.
-            await PostgresDB.getInstance().executeQuery('DELETE FROM tickets WHERE venta_id = $1', [venta_id]);
-
-
-            // Loop removed: sp_venta_crear already inserts items from the JSON payload.
+            // await PostgresDB.getInstance().executeQuery('DELETE FROM tickets WHERE venta_id = $1', [venta_id]);
 
             // Verificar Total Confirmado
             const totalResult = await PostgresDB.getInstance().callStoredProcedure('sp_venta_get_by_id', [venta_id]);
@@ -246,8 +243,25 @@ export class SalesController {
         }
     }
 
+    public async searchSales(req: Request, res: Response) {
+        const { q } = req.query;
+        if (!q || typeof q !== 'string') {
+            return res.status(400).json({ success: false, error: 'Query parameter q is required' });
+        }
 
-    // sale.controller.ts
+        try {
+            // Task 2: Use Stored Procedure sp_venta_buscar
+            // The SP handles UUID detection and DNI search logic internally.
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_buscar', [q]);
+
+            // Return rows directly as requested
+            res.json({ success: true, result: result.rows });
+
+        } catch (error: any) {
+            console.error("Search error:", error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
 
     public async createReturn(req: Request, res: Response) {
         // 1. Recibimos los datos correctos del frontend (DevolucionesPage ya tiene selectedItems)
@@ -255,8 +269,8 @@ export class SalesController {
         const { venta_id, items, motivo, total_reembolsado } = req.body;
 
         try {
-            // 2. Llamamos al SP respetando SU orden de parámetros:
-            // p_venta_id, p_total, p_motivo, p_items
+            // 2. Llamamos al SP: sp_devolucion_crear(venta_id, total, motivo, items)
+            // El SP devuelve un JSON { "success": true, "devolucion_id": "..." }
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_devolucion_crear', [
                 venta_id,
                 total_reembolsado || 0,        // Numeric
@@ -264,10 +278,14 @@ export class SalesController {
                 JSON.stringify(items)          // JSONB
             ]);
 
-            res.json({ success: true, result: result.rows[0] });
-        } catch (error) {
+            // El resultado de una función que retorna JSON suele estar en la primera columna de la primera fila
+            const rawResponse = result.rows[0];
+            const spResponse = rawResponse?.sp_devolucion_crear || rawResponse;
+
+            res.json({ success: true, result: spResponse });
+        } catch (error: any) {
             console.error("Error en createReturn:", error);
-            res.status(500).json({ success: false, error });
+            res.status(500).json({ success: false, error: error.message || error });
         }
     }
 
