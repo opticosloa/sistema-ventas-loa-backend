@@ -19,6 +19,7 @@ import obrasSocialesRoutes from './routes/obras_sociales.routes';
 import liquidacionesRoutes from './routes/liquidaciones.routes';
 import providersRoutes from './routes/providers.routes';
 import cashRoutes from './routes/cash.routes';
+import multifocalesRoutes from './routes/multifocales.routes';
 
 export class AppRoutes {
     static get routes(): Router {
@@ -44,6 +45,7 @@ export class AppRoutes {
         router.use('/api/obras-sociales', obrasSocialesRoutes);
         router.use('/api/liquidaciones', liquidacionesRoutes);
         router.use('/api/providers', providersRoutes);
+        router.use('/api/multifocales', multifocalesRoutes);
 
         return router;
     }
