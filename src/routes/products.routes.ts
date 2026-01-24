@@ -13,5 +13,6 @@ router.get('/:id', controller.getProductById.bind(controller));
 router.delete("/:id", authMiddleware, controller.deleteProducto.bind(controller));
 router.put("/:id", authMiddleware, controller.updateProducto.bind(controller));
 router.post("/update-prices-by-brand", authMiddleware, controller.updatePricesByBrand.bind(controller));
+router.post("/bulk-upsert", authMiddleware, controller.bulkUpsert.bind(controller));
 
 export default router;

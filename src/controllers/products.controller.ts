@@ -209,4 +209,106 @@ export class ProductsController {
             res.status(500).json({ success: false, error: 'Error al filtrar productos por tipo' });
         }
     }
+
+    public async bulkUpsert(req: Request, res: Response) {
+        const { items } = req.body;
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, error: 'No items provided for bulk upsert' });
+        }
+
+        const db = PostgresDB.getInstance();
+        const client = await db.getClient();
+
+        try {
+            await client.query('BEGIN');
+
+            // 0. Obtener cotización del dólar actual
+            const configResult = await client.query(`SELECT * FROM sp_config_global_get('cotizacion_dolar')`);
+            const dolarRate = Number(configResult.rows[0]?.valor || 0);
+
+            if (!dolarRate || dolarRate <= 0) {
+                throw new Error("Cotización del dólar no encontrada o inválida en config_global.");
+            }
+
+            let createdCount = 0;
+            let updatedCount = 0;
+
+            for (const item of items) {
+                const nombreUpper = item.nombre ? item.nombre.trim().toUpperCase() : '';
+                if (!nombreUpper) continue;
+
+                // Calcular Precio USD basado en Precio Venta (ARS) / Cotización
+                // Nota: item.precio_venta viene del excel. item.precio_usd se ignora del excel si la regla es calcularlo.
+                const precioVentaArs = Number(item.precio_venta || 0);
+                const precioCostoArs = Number(item.precio_costo || 0);
+
+                const calculatedUsd = precioVentaArs > 0 ? (precioVentaArs / dolarRate) : 0;
+
+                let existingQuery = 'SELECT producto_id FROM productos WHERE nombre = $1';
+                const existingParams: any[] = [nombreUpper];
+
+                if (item.marca_id) {
+                    existingQuery += ' AND marca_id = $2';
+                    existingParams.push(item.marca_id);
+                } else {
+                    existingQuery += ' AND marca_id IS NULL';
+                }
+
+                const existingRes = await client.query(existingQuery, existingParams);
+
+                if (existingRes.rows.length > 0) {
+                    const producto_id = existingRes.rows[0].producto_id;
+                    await client.query(
+                        `UPDATE productos SET 
+                            precio_costo = $1, 
+                            precio_venta = $2,
+                            precio_usd = $3,
+                            updated_at = NOW() 
+                        WHERE producto_id = $4`,
+                        [
+                            precioCostoArs,
+                            precioVentaArs,
+                            calculatedUsd,
+                            producto_id
+                        ]
+                    );
+                    updatedCount++;
+                } else {
+                    await client.query(
+                        `INSERT INTO productos (
+                            nombre, tipo, marca_id, stock, stock_minimo, 
+                            precio_costo, precio_venta, precio_usd, iva, 
+                            descripcion, ubicacion, is_active
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                        [
+                            nombreUpper,
+                            item.tipo || 'ACCESORIO',
+                            item.marca_id || null,
+                            item.stock || 0,
+                            item.stock_minimo || 0,
+                            precioCostoArs,
+                            precioVentaArs,
+                            calculatedUsd,
+                            item.iva || 21,
+                            item.descripcion || null,
+                            item.ubicacion || null,
+                            true
+                        ]
+                    );
+                    createdCount++;
+                }
+            }
+
+            await client.query('COMMIT');
+            res.json({ success: true, created: createdCount, updated: updatedCount });
+
+        } catch (error: any) {
+            await client.query('ROLLBACK');
+            console.error('Bulk Upsert Transaction Error:', error);
+            res.status(500).json({ success: false, error: 'Transaction failed: ' + error.message });
+        } finally {
+            client.release();
+        }
+    }
 }
