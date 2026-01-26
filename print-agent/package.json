@@ -1,0 +1,14 @@
+{
+    "name": "local-print-agent",
+    "version": "1.0.0",
+    "description": "Agent for local printing from cloud webapp",
+    "main": "print-server.js",
+    "scripts": {
+        "start": "node print-server.js"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^4.18.2",
+        "pdf-to-printer": "^1.6.3"
+    }
+}
