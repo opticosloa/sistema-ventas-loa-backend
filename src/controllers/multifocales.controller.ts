@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { MultifocalesService } from "../services/multifocales.service";
+import { MultifocalesService } from "../service";
 
 export class MultifocalesController {
     private static instance: MultifocalesController;
