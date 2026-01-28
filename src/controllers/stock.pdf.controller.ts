@@ -114,51 +114,76 @@ export class StockPdfController {
     }
 
     private async drawLabel(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, product: any, fontSize: number) {
-        // 1. Cut Guide (Dashed Box) - Optional: Make it light gray
-        doc.lineWidth(0.5).strokeColor('#ccc').dash(2, { space: 2 });
-        doc.rect(x, y, w, h).stroke();
-        doc.undash().strokeColor('black'); // Reset
+        // 1. Label Boundary (Outline)
+        doc.lineWidth(0.5).strokeColor('#e0e0e0').rect(x, y, w, h).stroke();
 
-        // Padding inside the cell
+        // Constants for Internal Layout
         const padding = 2;
         const innerX = x + padding;
         const innerY = y + padding;
         const innerW = w - (padding * 2);
         const innerH = h - (padding * 2);
 
-        // 2. QR Code
-        // Reserve about 60% of height for QR, 40% for text, or adapt based on aspect ratio
-        // Let's try to fit QR in top center.
-        const qrSize = Math.min(innerW, innerH * 0.60);
+        // Sections: 70% QR, 30% Text
+        const splitRatio = 0.70;
+        const qrSectionH = innerH * splitRatio;
+        const textSectionH = innerH * (1 - splitRatio);
+
+        // Y position of the divider (Cut Guide)
+        // We calculate coordinate relative to the inner/outer box using inner logic for sizing but drawing from edge for the line
+        // The user wants a "guia de sub-corte ... interna", but usually cut lines go edge to edge.
+        // Let's place it at y + padding + qrSectionH roughly.
+        const splitLineY = innerY + qrSectionH;
+
+        // 2. Sub-cut Guide (Dotted Line)
+        doc.save();
+        doc.lineWidth(0.5)
+            .strokeColor('#999') // Visible grey
+            .dash(2, { space: 2 }) // Dotted
+            .moveTo(x, splitLineY)
+            .lineTo(x + w, splitLineY)
+            .stroke();
+        doc.restore();
+
+        // 3. QR Code (Strictly ID)
+        const qrData = String(product.producto_id); // Simplify payload
+        const qrBufferPadding = 2; // Space inside the top section
+        // Calculate max square fit
+        const maxQrDim = Math.min(innerW, qrSectionH - (qrBufferPadding * 2));
 
         try {
-            const qrData = product.codigo_qr || product.producto_id.toString();
-            const qrBuffer = await QRCode.toBuffer(qrData, { margin: 0 });
-
-            const qrX = innerX + (innerW - qrSize) / 2;
-            const qrY = innerY;
-
-            doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-        } catch (e) {
-            console.error("Error creating QR for product", product.producto_id, e);
-        }
-
-        // 3. Text (Product Name)
-        const textY = innerY + qrSize + 2;
-        const textHeight = innerH - qrSize - 4;
-
-        if (textHeight > 5) {
-            doc.fontSize(fontSize).font('Helvetica');
-            doc.text(product.nombre, innerX, textY, {
-                width: innerW,
-                height: textHeight,
-                align: 'center',
-                ellipsis: true,
-                lineBreak: true
+            const qrBuffer = await QRCode.toBuffer(qrData, {
+                margin: 0,
+                errorCorrectionLevel: 'L' // Low density for clearer scanning
             });
 
-            // Optional: Add Price or Code below if space permits?
-            // For now just name as requested.
+            // Center QR in top section
+            const qrX = innerX + (innerW - maxQrDim) / 2;
+            const qrY = innerY + (qrSectionH - maxQrDim) / 2;
+
+            doc.image(qrBuffer, qrX, qrY, { width: maxQrDim, height: maxQrDim });
+        } catch (e) {
+            console.error("Error generating QR:", e);
+        }
+
+        // 4. Product Name (Bottom Section)
+        const textMarginTop = 4;
+        const textY = splitLineY + textMarginTop;
+        const textAvailableH = textSectionH - textMarginTop - 2;
+
+        if (textAvailableH > 5) { // Only draw if space exists
+            doc.fillColor('black')
+                .fontSize(fontSize)
+                .font('Helvetica');
+
+            doc.text(product.nombre, innerX, textY, {
+                width: innerW,
+                height: textAvailableH,
+                align: 'center',
+                ellipsis: true,
+                lineBreak: true,
+                baseline: 'top' // Ensure it starts somewhat below the line
+            });
         }
     }
 }
