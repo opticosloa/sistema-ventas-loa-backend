@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { SalesController } from "../controllers/sales.controller";
 import { SalesPdfController } from "../controllers/sales.pdf.controller";
+import { BudgetController } from "../controllers/budget.controller";
 import { authMiddleware } from "../middlewares";
 
 const router = Router();
 const controller = SalesController.getInstance();
 const pdfController = SalesPdfController.getInstance();
+const budgetController = BudgetController.getInstance();
 
 router.post('/', authMiddleware, controller.createSale.bind(controller));
 router.get('/', authMiddleware, controller.getSales.bind(controller));
@@ -26,6 +28,8 @@ router.post('/:id/intentar-cierre', authMiddleware, controller.intentarCierre.bi
 router.post('/:id/entregar', authMiddleware, controller.entregarVenta.bind(controller));
 router.put('/:id/cancel', controller.cancelSale.bind(controller));
 router.put('/:id/observation', authMiddleware, controller.updateObservation.bind(controller));
+
+router.post('/budget', authMiddleware, budgetController.generateBudgetPdf.bind(budgetController));
 router.put('/:id/budget', authMiddleware, controller.markAsBudget.bind(controller));
 
 export default router;

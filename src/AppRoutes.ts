@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import stockRoutes from './routes/stock.routes';
 import productsRoutes from './routes/products.routes';
 import prescriptionRoutes from './routes/prescription.routes';
 import ticketRoutes from './routes/ticket.routes';
@@ -45,6 +46,7 @@ export class AppRoutes {
         router.use('/api/obras-sociales', obrasSocialesRoutes);
         router.use('/api/liquidaciones', liquidacionesRoutes);
         router.use('/api/providers', providersRoutes);
+        router.use('/api/stock', stockRoutes);
         router.use('/api/multifocales', multifocalesRoutes);
 
         return router;
