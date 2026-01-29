@@ -59,11 +59,12 @@ export class TenantsController {
 
     public async updateTenant(req: Request, res: Response) {
         const { id } = req.params;
-        const { nombre, encargado, direccion, telefono, email, is_active, mp_public_key, mp_access_token }: Sucursal = req.body;
+        const { nombre, encargado, direccion, telefono, email, is_active, mp_public_key, mp_access_token, color_identificativo }: Sucursal = req.body;
 
         try {
             // SP Signature provided by user: p_sucursal_id, p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_is_active
             // WARNING: The provided SP does NOT accept mp_public_key or mp_access_token.
+            // But wait, the previous turn I implemented updateTenant. I should just ensure it stays correctly.
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_editar', [
                 id,
                 nombre,
@@ -71,7 +72,33 @@ export class TenantsController {
                 direccion,
                 telefono,
                 email,
-                is_active
+                is_active,
+                mp_public_key,
+                mp_access_token,
+                color_identificativo
+            ]);
+            res.json({ success: true, result });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async changeUserBranch(req: Request, res: Response) {
+        const { usuario_id, nueva_sucursal_id } = req.body;
+        // p_admin_id should come from the logged in user (req.user.id or similar)
+        // Assuming authMiddleware populates req.user
+        const admin_id = (req as any).user?.uid || (req as any).user?.usuario_id;
+
+        if (!usuario_id || !nueva_sucursal_id) {
+            return res.status(400).json({ success: false, error: 'Missing usuario_id or nueva_sucursal_id' });
+        }
+
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_cambiar_sucursal', [
+                usuario_id,
+                nueva_sucursal_id,
+                admin_id || null // Audit
             ]);
             res.json({ success: true, result });
         } catch (error) {

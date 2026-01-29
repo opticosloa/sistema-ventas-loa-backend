@@ -22,13 +22,21 @@ export class ProductsController {
             let result;
 
             if (sucursal_id) {
-                // Listar por sucursal usando función (no SP, generalmente SELECT * FROM function)
-                // O si es SP que retorna tabla completa. Asumiremos sp_productos_listar_por_sucursal devuelve query result.
+                // SP: p_sucursal_id, p_solo_activos
+                // Returns: producto_id, nombre, codigo_qr, precio_venta, stock_sucursal, stock_total, ubicacion_local
                 result = await PostgresDB.getInstance().callStoredProcedure('sp_productos_listar_por_sucursal', [
                     sucursal_id,
-                    tipo ? (tipo as string).toUpperCase() : null
+                    true // p_solo_activos default true
                 ]);
-                res.json({ success: true, result: result.rows || result });
+
+                // Map result to match expected frontend interface (Produto.stock)
+                // If the SP returns stock_sucursal, we map it to 'stock' property for compatibility
+                const rows = (result.rows || result).map((p: any) => ({
+                    ...p,
+                    stock: p.stock_sucursal // Override logic stock with branch stock
+                }));
+
+                res.json({ success: true, result: rows });
             } else {
                 // Fallback / legacy logic
                 let query = 'SELECT * FROM productos WHERE is_active = true';
@@ -196,6 +204,28 @@ export class ProductsController {
             res.json({ success: true, result: result.rows || result });
         } catch (error) {
             console.error('Error in getStockDistribution:', error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async decreaseStock(req: Request, res: Response) {
+        const { id } = req.params; // Product ID
+        const { sucursal_id, cantidad, es_cristal } = req.body;
+
+        if (!sucursal_id || !cantidad) {
+            return res.status(400).json({ success: false, error: 'Sucursal ID and Cantidad are required' });
+        }
+
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_stock_descontar_venta', [
+                sucursal_id,
+                id,
+                cantidad,
+                es_cristal || false
+            ]);
+            res.json({ success: true, result });
+        } catch (error) {
+            console.error('Error in decreaseStock:', error);
             res.status(500).json({ success: false, error });
         }
     }
