@@ -190,10 +190,28 @@ export class UsersController {
     }
 
     public async changePassword(req: Request, res: Response) {
-        const { email, password } = req.body;
+        const { email, password, currentPassword } = req.body;
 
         try {
             let emailUpper = email.toUpperCase();
+
+            // 1. Get user to verify current password
+            const userResult = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_email', [emailUpper]);
+
+            if (!userResult.rows || userResult.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+            }
+
+            const userData = userResult.rows[0];
+
+            // 2. Verify current password
+            const isPasswordValid = bcrypt.compareSync(currentPassword, userData.password_hash);
+
+            if (!isPasswordValid) {
+                return res.status(400).json({ success: false, error: 'La contraseña actual es incorrecta' });
+            }
+
+            // 3. Update to new password
             const password_hash = bcrypt.hashSync(password, envs.BCRYPT_SALT_ROUNDS);
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_actualizar_password', [emailUpper, password_hash]);
 
