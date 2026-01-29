@@ -135,15 +135,8 @@ export class StockPdfController {
         // Let's place it at y + padding + qrSectionH roughly.
         const splitLineY = innerY + qrSectionH;
 
-        // 2. Sub-cut Guide (Dotted Line)
-        doc.save();
-        doc.lineWidth(0.5)
-            .strokeColor('#999') // Visible grey
-            .dash(2, { space: 2 }) // Dotted
-            .moveTo(x, splitLineY)
-            .lineTo(x + w, splitLineY)
-            .stroke();
-        doc.restore();
+        // 2. Sub-cut Guide (removed)
+
 
         // 3. QR Code (Strictly ID)
         const qrData = String(product.producto_id); // Simplify payload

@@ -59,6 +59,7 @@ export class PrescriptionController {
       doctor_id,
       matricula,
       fecha,
+      fecha_entrega,
       lejos,
       cerca,
       multifocal,
@@ -222,6 +223,14 @@ export class PrescriptionController {
         const venta_id = ventaData.venta_id;
 
         console.log("Venta y Ticket creados automáticamente. ID:", venta_id);
+
+        // D. [NUEVO] Actualizar fecha de entrega en el ticket si existe
+        if (fecha_entrega) {
+          await PostgresDB.getInstance().executeQuery(
+            'UPDATE tickets SET fecha_entrega_estimada = $1 WHERE venta_id = $2',
+            [fecha_entrega, venta_id]
+          );
+        }
 
         // 5. Verificar Total (Esto se mantiene igual para confirmar el cálculo de la DB)
         const totalResult = await PostgresDB.getInstance().callStoredProcedure('sp_venta_get_by_id', [venta_id]);
