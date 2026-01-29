@@ -15,16 +15,19 @@ export class TenantsController {
     }
 
     public async createTenant(req: Request, res: Response) {
-        const { nombre, encargado, direccion, telefono, email, is_active }: Sucursal = req.body;
+        const { nombre, encargado, direccion, telefono, email, mp_public_key, mp_access_token }: Sucursal = req.body;
 
         try {
+            // SP Signature: p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_mp_public_key, p_mp_access_token
+            // Note: is_active is NOT in the provided SP for create. Encargado is UUID.
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_crear', [
                 nombre,
-                encargado,
+                encargado || null, // Ensure empty string becomes null for UUID safety
                 direccion,
                 telefono,
                 email,
-                is_active ?? true
+                mp_public_key || null,
+                mp_access_token || null
             ]);
             res.json({ success: true, result });
         } catch (error) {
@@ -56,13 +59,15 @@ export class TenantsController {
 
     public async updateTenant(req: Request, res: Response) {
         const { id } = req.params;
-        const { nombre, encargado, direccion, telefono, email, is_active }: Sucursal = req.body;
+        const { nombre, encargado, direccion, telefono, email, is_active, mp_public_key, mp_access_token }: Sucursal = req.body;
 
         try {
+            // SP Signature provided by user: p_sucursal_id, p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_is_active
+            // WARNING: The provided SP does NOT accept mp_public_key or mp_access_token.
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_editar', [
                 id,
                 nombre,
-                encargado,
+                encargado || null,
                 direccion,
                 telefono,
                 email,

@@ -16,21 +16,34 @@ export class ProductsController {
     }
 
     public async getProducts(req: Request, res: Response) {
-        const { tipo } = req.query;
+        const { tipo, sucursal_id } = req.query;
 
         try {
-            let query = 'SELECT * FROM productos WHERE is_active = true';
-            const params: any[] = [];
+            let result;
 
-            if (tipo) {
-                query += ' AND tipo = $1';
-                params.push((tipo as string).toUpperCase());
+            if (sucursal_id) {
+                // Listar por sucursal usando función (no SP, generalmente SELECT * FROM function)
+                // O si es SP que retorna tabla completa. Asumiremos sp_productos_listar_por_sucursal devuelve query result.
+                result = await PostgresDB.getInstance().callStoredProcedure('sp_productos_listar_por_sucursal', [
+                    sucursal_id,
+                    tipo ? (tipo as string).toUpperCase() : null
+                ]);
+                res.json({ success: true, result: result.rows || result });
+            } else {
+                // Fallback / legacy logic
+                let query = 'SELECT * FROM productos WHERE is_active = true';
+                const params: any[] = [];
+
+                if (tipo) {
+                    query += ' AND tipo = $1';
+                    params.push((tipo as string).toUpperCase());
+                }
+
+                query += ' ORDER BY nombre ASC';
+
+                result = await PostgresDB.getInstance().executeQuery(query, params);
+                res.json({ success: true, result: result.rows || result });
             }
-
-            query += ' ORDER BY nombre ASC';
-
-            const result = await PostgresDB.getInstance().executeQuery(query, params);
-            res.json({ success: true, result: result.rows || result }); // Adjust based on DB wrapper return
         } catch (error) {
             console.error(error);
             res.status(500).json({ success: false, error: 'Error obteniendo productos' });
@@ -151,6 +164,38 @@ export class ProductsController {
             res.json({ success: true, result });
         } catch (error) {
             console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async assignStockDistribution(req: Request, res: Response) {
+        const { id } = req.params;
+        const { stock_data, es_cristal } = req.body; // Expects array of { sucursal_id, cantidad }
+
+        try {
+            // sp_producto_asignar_stock_masivo(p_producto_id, p_json_data, p_es_cristal)
+            // p_json_data expected as JSON/JSONB
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_producto_asignar_stock_masivo', [
+                id,
+                JSON.stringify(stock_data), // Pass as string? Or object depending on DB wrapper. Usually string for JSON param.
+                es_cristal || false
+            ]);
+            res.json({ success: true, result });
+        } catch (error) {
+            console.error('Error in assignStockDistribution:', error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async getStockDistribution(req: Request, res: Response) {
+        const { id } = req.params;
+
+        try {
+            // sp_stock_consultar_distribucion(p_producto_id)
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_stock_consultar_distribucion', [id]);
+            res.json({ success: true, result: result.rows || result });
+        } catch (error) {
+            console.error('Error in getStockDistribution:', error);
             res.status(500).json({ success: false, error });
         }
     }
