@@ -32,4 +32,6 @@ export const envs = {
     MP_USER_ID: get('MP_USER_ID').required().asString(),
     MP_EXTERNAL_POS_ID: get('MP_EXTERNAL_POS_ID').asString(),
     MP_POINT_DEVICE_ID: get('MP_POINT_DEVICE_ID').asString(),
+
+    MP_ENCRYPTION_KEY: get('MP_ENCRYPTION_KEY').required().asString()
 }

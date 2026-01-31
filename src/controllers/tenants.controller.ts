@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PostgresDB } from '../database/postgres';
 import { Sucursal } from '../types/sucursal';
+import { encrypt } from '../helpers/crypto';
 
 export class TenantsController {
     private static instance: TenantsController;
@@ -18,6 +19,9 @@ export class TenantsController {
         const { nombre, encargado, direccion, telefono, email, mp_public_key, mp_access_token, mp_user_id }: Sucursal = req.body;
 
         try {
+            // Encrypt sensitive token if present
+            const encryptedAccessToken = mp_access_token ? encrypt(mp_access_token) : null;
+
             // SP Signature: p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_mp_public_key, p_mp_access_token, p_mp_user_id
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_crear', [
                 nombre,
@@ -26,7 +30,7 @@ export class TenantsController {
                 telefono,
                 email,
                 mp_public_key || null,
-                mp_access_token || null,
+                encryptedAccessToken,
                 mp_user_id || null
             ]);
             res.json({ success: true, result });
@@ -62,6 +66,9 @@ export class TenantsController {
         const { nombre, encargado, direccion, telefono, email, is_active, mp_public_key, mp_access_token, color_identificativo, mp_user_id }: Sucursal = req.body;
 
         try {
+            // Encrypt sensitive token if present
+            const encryptedAccessToken = mp_access_token ? encrypt(mp_access_token) : null;
+
             // SP Signature: p_sucursal_id, p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_is_active, p_mp_public_key, p_mp_access_token, p_color_identificativo, p_mp_user_id
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_editar', [
                 id,
@@ -72,7 +79,7 @@ export class TenantsController {
                 email,
                 is_active,
                 mp_public_key || null,
-                mp_access_token || null,
+                encryptedAccessToken,
                 color_identificativo,
                 mp_user_id || null
             ]);
