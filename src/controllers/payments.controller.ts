@@ -26,10 +26,14 @@ export class PaymentsController {
     }
 
     public async createMercadoPagoPreference(req: Request, res: Response) {
-        const { venta_id, monto, title } = req.body;
+        const { venta_id, monto, title, sucursal_id } = req.body;
+
+        if (!sucursal_id) {
+            return res.status(400).json({ success: false, error: 'sucursal_id is required' });
+        }
 
         try {
-            const result = await PaymentService.getInstance().createMercadoPagoPreference(venta_id, monto, title);
+            const result = await PaymentService.getInstance().createMercadoPagoPreference(venta_id, monto, title, sucursal_id);
             res.json({ success: true, ...result });
         } catch (error) {
             console.log(error);
@@ -38,10 +42,10 @@ export class PaymentsController {
     }
 
     public async createInStoreQr(req: Request, res: Response) {
-        const { venta_id, monto, title } = req.body;
+        const { venta_id, monto, title, sucursal_id } = req.body;
 
         try {
-            const result = await PaymentService.getInstance().createInStoreOrder(venta_id, monto, title);
+            const result = await PaymentService.getInstance().createInStoreOrder(venta_id, monto, title, sucursal_id);
             res.json({ success: true, ...result });
         } catch (error) {
             console.log(error);
@@ -76,6 +80,8 @@ export class PaymentsController {
         let resourceType = type || action || req.query.topic;
         // El preference_id solo vendrá aquí si lo configuraste manualmente en la URL de notificación
         const mp_preference_id = req.query.preference_id as string;
+        // Sucursal ID para multi-tenant (si viene del query param que configuramos en notification_url)
+        const sucursal_id = req.query.sucursal_id as string;
 
         if (!resourceType && (req.body.intent_type || req.body.payment || req.body.id)) {
             console.log("📍 Webhook Point Detectado!");
@@ -86,11 +92,12 @@ export class PaymentsController {
             resourceId = req.body.payment?.id || req.body.id;
         }
 
-        console.log(`Procesando como: Type=${resourceType}, ID=${resourceId}`);
+        console.log(`Procesando como: Type=${resourceType}, ID=${resourceId}, Sucursal=${sucursal_id}`);
 
         try {
             // Pasamos el resourceId para que el servicio busque los detalles en la API de MP
             const found = await PaymentService.getInstance().handleMPWebhook(
+                sucursal_id,
                 mp_preference_id,
                 resourceType,
                 resourceId,
@@ -106,7 +113,8 @@ export class PaymentsController {
             }
         } catch (error) {
             console.error("Error procesando webhook:", error);
-            res.sendStatus(500);
+            // Silent error handling: return 200 OK to stop MP retries on internal errors
+            res.status(200).json({ status: 'error_handled', message: 'Internal error logged' });
         }
     }
 

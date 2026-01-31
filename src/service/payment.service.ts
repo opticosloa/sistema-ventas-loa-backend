@@ -3,11 +3,11 @@ import { Payment, PaymentMethod } from '../types/payments';
 import { MercadoPagoConfig, Preference, Payment as MPPayment } from 'mercadopago';
 import { envs } from '../helpers/envs';
 import { randomUUID } from 'crypto';
+import { decrypt } from '../helpers/crypto';
 
 // Configure Mercado Pago v2
-const client = new MercadoPagoConfig({
-    accessToken: envs.MP_ACCESS_TOKEN
-});
+// REMOVED GLOBAL CLIENT for Multi-Tenant Support
+// const client = new MercadoPagoConfig({ accessToken: envs.MP_ACCESS_TOKEN });
 
 export class PaymentService {
     private static instance: PaymentService;
@@ -57,16 +57,44 @@ export class PaymentService {
         return { success: true, pago_id };
     }
 
-    public async createMercadoPagoPreference(venta_id: string, monto: number, title: string = 'Venta óptica') {
+    public async createMercadoPagoPreference(venta_id: string, monto: number, title: string = 'Venta óptica', sucursal_id: string) {
+        // 1. Obtener datos de la sucursal (para el token)
+        const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
+        const sucursalRows = sucursalResult.rows || sucursalResult;
+
+        console.log(sucursalRows);
+        if (!sucursalRows || sucursalRows.length === 0) {
+            throw new Error(`Sucursal con ID ${sucursal_id} no encontrada.`);
+        }
+
+        const sucursal = sucursalRows[0];
+
+        if (!sucursal.mp_access_token) {
+            throw new Error(`La sucursal ${sucursal.nombre} no tiene configurado Mercado Pago (token faltante).`);
+        }
+
+        // 2. Desencriptar Token y crear cliente Scoped
+        // Nota: Solo desencriptamos. El helper se encarga de checkear iv:content
+        const accessToken = decrypt(sucursal.mp_access_token);
+
+        const scopedClient = new MercadoPagoConfig({
+            accessToken: accessToken
+        });
+
+        // 3. Crear el pago en DB (Local)
         const method = PaymentMethod.MP;
         const pago_id = await this._createPaymentInDB(venta_id, method, monto);
 
         // Limpiar URLs para evitar dobles barras
         const baseFront = envs.FRONT_URL.replace(/\/$/, "");
         const baseApi = envs.API_URL.replace(/\/$/, "");
-        const notificationUrl = `${baseApi}/api/payments/mercadopago/webhook?preference_id=PENDING`;
+        // URL de notificación (Webhook). Agregamos preference_id=PENDING temporalmente
+        // URL de notificación (Webhook). Agregamos preference_id=PENDING temporalmente
+        // Y Agregamos sucursal_id para identificar el tenant en el webhook
+        const notificationUrl = `${baseApi}/api/payments/mercadopago/webhook?preference_id=PENDING&sucursal_id=${sucursal_id}`;
 
-        const preferenceClient = new Preference(client);
+        // 4. Crear Preferencia con el Cliente de la SUCURSAL
+        const preferenceClient = new Preference(scopedClient);
 
         const preferenceData = {
             body: {
@@ -84,11 +112,16 @@ export class PaymentService {
                 },
                 auto_return: 'approved',
                 notification_url: notificationUrl,
-                external_reference: pago_id
+                external_reference: pago_id,
+                metadata: {
+                    sucursal_id: sucursal_id,
+                    venta_id: venta_id
+                }
             }
         };
 
-        // console.log(preferenceData, preferenceClient)
+        // ELIMINAR METADATA SI CAUSA ERROR
+
         const mpResponse = await preferenceClient.create(preferenceData);
 
         // Actualizar el pago en DB con el ID real de la preferencia
@@ -99,17 +132,22 @@ export class PaymentService {
             ]);
         }
 
-        return { init_point: mpResponse.init_point, preference_id: mpResponse.id };
+        // Retornamos también la PUBLIC KEY de la sucursal para que el front inicialice el Brick
+        return {
+            init_point: mpResponse.init_point,
+            preference_id: mpResponse.id,
+            public_key: sucursal.mp_public_key
+        };
     }
 
     private static generatedPosId: string | undefined;
 
-    private async _getOrCreatePOS(): Promise<string> {
+    private async _getOrCreatePOS(accessToken: string, userId: string): Promise<string> {
         // 1. Determine Fixed External ID
         const targetExternalId = (envs.MP_EXTERNAL_POS_ID || 'CAJALUJAN01').replace(/[^a-zA-Z0-9]/g, '');
 
         const headers = {
-            'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
         };
 
@@ -137,7 +175,7 @@ export class PaymentService {
         // 3. Create Store if needed (Only required if creating POS)
         let storeId: string;
         try {
-            const storesResponse = await fetch(`https://api.mercadopago.com/users/${envs.MP_USER_ID}/stores/search?limit=1`, { headers });
+            const storesResponse = await fetch(`https://api.mercadopago.com/users/${userId}/stores/search?limit=1`, { headers });
             if (!storesResponse.ok) throw new Error('Error buscando stores en MP');
 
             const storesData: any = await storesResponse.json();
@@ -162,7 +200,7 @@ export class PaymentService {
                     }, // Default dummy location if not provided
                     external_id: "STORE_LOA_MAIN"
                 };
-                const createStoreRes = await fetch(`https://api.mercadopago.com/users/${envs.MP_USER_ID}/stores`, {
+                const createStoreRes = await fetch(`https://api.mercadopago.com/users/${userId}/stores`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(storePayload)
@@ -237,30 +275,53 @@ export class PaymentService {
         }
     }
 
-    public async createInStoreOrder(venta_id: string, monto: number, title: string = 'Venta óptica') {
+    public async createInStoreOrder(venta_id: string, monto: number, title: string = 'Venta óptica', sucursal_id?: string) {
         const method = PaymentMethod.MP;
         const pago_id = await this._createPaymentInDB(venta_id, method, monto);
 
-        // 1. Obtener User ID dinámico
+        // --- Credenciales Dinámicas ---
+        let access_token = envs.MP_ACCESS_TOKEN;
+        let userId: string;
+
+        // Si hay sucursal_id, intentamos usar sus credenciales
+        if (sucursal_id) {
+            try {
+                const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
+                const sucursal = sucursalResult.rows?.[0] || sucursalResult?.[0];
+                if (sucursal && sucursal.mp_access_token) {
+                    access_token = decrypt(sucursal.mp_access_token);
+                    console.log(`[QR] Usando credenciales de sucursal ${sucursal.nombre}`);
+                }
+            } catch (e) {
+                console.warn("Error obteniendo credenciales de sucursal para QR, usando fallback envs", e);
+            }
+        }
+
+        // 1. Obtener User ID dinámico (Usando el token determinado)
+        // Nota: Si el token es de una cuenta distinta, el user_id será distinto.
         const meRes = await fetch('https://api.mercadopago.com/users/me', {
-            headers: { 'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}` }
+            headers: { 'Authorization': `Bearer ${access_token}` }
         });
-        if (!meRes.ok) throw new Error("Could not fetch MP User ID");
+
+        console.log(meRes);
+
+        if (!meRes.ok) throw new Error("Could not fetch MP User ID with provided token");
         const meData: any = await meRes.json();
-        const userId = meData.id;
+        userId = meData.id;
 
         // 2. Obtener/Validar POS
-        const externalPosId = await this._getOrCreatePOS();
-        const accessToken = envs.MP_ACCESS_TOKEN;
+        // Pasamos el token explícitamente a _getOrCreatePOS para que cree el POS en la cuenta correcta
+        const externalPosId = await this._getOrCreatePOS(access_token, userId);
 
         const url = `https://api.mercadopago.com/instore/qr/seller/collectors/${userId}/pos/${externalPosId}/orders`;
 
         // 3. Payload Limpio y Validado
         const totalAmount = parseFloat(Number(monto).toFixed(2)); // Aseguramos 2 decimales máx.
 
-        //  SE MODIFICÓ DESPUES DE QUE LOS PAGOS POR POINT FUNCIONEN, BORRAR SI PASA ALGO Y USAR API_URL EN notification_url
         // Limpiar URL base
         const baseApi = envs.API_URL.replace(/\/$/, "");
+        // Agregar sucursal_id si existe
+        const webhookQuery = sucursal_id ? `?sucursal_id=${sucursal_id}` : '';
 
         const payload = {
             external_reference: pago_id.toString(),
@@ -278,7 +339,7 @@ export class PaymentService {
                     total_amount: totalAmount
                 }
             ],
-            notification_url: `${baseApi}/api/payments/mercadopago/webhook`
+            notification_url: `${baseApi}/api/payments/mercadopago/webhook${webhookQuery}`
         };
 
         console.log("📡 Enviando orden a MP:", JSON.stringify(payload));
@@ -286,7 +347,7 @@ export class PaymentService {
         const response = await fetch(url, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${accessToken}`,
+                'Authorization': `Bearer ${access_token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
@@ -380,7 +441,7 @@ export class PaymentService {
         return { success: true, intent_id: data.id, pago_id, status: data.status };
     }
 
-    public async handleMPWebhook(mp_preference_id: string | undefined, type: any, id: any, data: any) {
+    public async handleMPWebhook(sucursal_id: string | undefined, mp_preference_id: string | undefined, type: any, id: any, data: any) {
         // 1. Filtro de eventos
         if (type !== 'payment' && type !== 'merchant_order' && type !== 'order') {
             console.log('Evento ignorado:', type);
@@ -396,6 +457,30 @@ export class PaymentService {
         const resourceId = String(paymentId);
 
         try {
+            // --- Determine Credentials Implementation ---
+            // SILENT ERROR HANDLING para búsqueda de sucursal
+            // Si algo falla, usaremos envs como fallback o retornamos sin lanzar
+            let localClient: MercadoPagoConfig;
+            let currentAccessToken = envs.MP_ACCESS_TOKEN; // Default fallback
+
+            if (sucursal_id) {
+                try {
+                    const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
+                    const sucursal = sucursalResult.rows?.[0] || sucursalResult?.[0];
+                    if (sucursal && sucursal.mp_access_token) {
+                        currentAccessToken = decrypt(sucursal.mp_access_token);
+                        console.log(`[Webhook] Usando credenciales de sucursal ID: ${sucursal_id}`);
+                    } else {
+                        console.warn(`[Webhook] Sucursal ID ${sucursal_id} no encontrada o sin token. Usando Global.`);
+                    }
+                } catch (e) {
+                    console.error(`[Webhook] Error buscando sucursal ${sucursal_id}, usando Global. Error:`, e);
+                    // No lanzamos error para mantener el flujo (fallback)
+                }
+            }
+
+            localClient = new MercadoPagoConfig({ accessToken: currentAccessToken });
+
             let raw_status = 'unknown'; // Aquí guardaremos el status crudo en INGLÉS
             let external_reference = null;
             let final_preference_id = mp_preference_id;
@@ -406,7 +491,8 @@ export class PaymentService {
                 external_reference = data.external_reference;
             }
             else if (type === 'payment') {
-                const paymentClient = new MPPayment(client);
+                // Instanciamos el recurso de pago con el cliente local
+                const paymentClient = new MPPayment(localClient);
                 const paymentInfo = await paymentClient.get({ id: resourceId });
 
                 raw_status = paymentInfo.status || 'unknown';
@@ -422,7 +508,7 @@ export class PaymentService {
             }
             else if (type === 'merchant_order') {
                 const response = await fetch(`https://api.mercadopago.com/merchant_orders/${resourceId}`, {
-                    headers: { 'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}` }
+                    headers: { 'Authorization': `Bearer ${currentAccessToken}` }
                 });
                 if (!response.ok) throw new Error('Failed to fetch merchant order');
                 const orderData = await response.json();
@@ -531,12 +617,33 @@ export class PaymentService {
 
     public async createDynamicQR(total: number, sucursal_id: string, venta_id: string) {
         try {
-            //* TODO: HACER QUE LAS CREDENCIALES SEAN DINAMICAS PARA CADA SUCURSAL
-            // 1. Obtener credenciales (DB)
-            // const credenciales = await this.getSucursalCredentials(sucursal_id);
+            // --- Credenciales Dinámicas (Implementation similiar to createInStoreOrder) ---
+            let access_token = envs.MP_ACCESS_TOKEN;
 
-            const external_pos_id = await this._getOrCreatePOS();
-            const access_token = envs.MP_ACCESS_TOKEN;
+            // Si hay sucursal_id, intentamos usar sus credenciales
+            if (sucursal_id) {
+                try {
+                    const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
+                    const sucursal = sucursalResult.rows?.[0] || sucursalResult?.[0];
+                    if (sucursal && sucursal.mp_access_token) {
+                        access_token = decrypt(sucursal.mp_access_token);
+                        console.log(`[DynamicQR] Usando credenciales de sucursal ${sucursal.nombre}`);
+                    }
+                } catch (e) {
+                    console.warn("Error obteniendo credenciales para DynamicQR, usando fallback", e);
+                }
+            }
+
+            // 1. Obtener User ID
+            const meRes = await fetch('https://api.mercadopago.com/users/me', {
+                headers: { 'Authorization': `Bearer ${access_token}` }
+            });
+            if (!meRes.ok) throw new Error("Could not fetch MP User ID");
+            const meData: any = await meRes.json();
+            const userId = meData.id;
+
+            // 2. Obtener POS
+            const external_pos_id = await this._getOrCreatePOS(access_token, userId);
 
             const safeTotalStr = Number(total).toFixed(2);
             const pago_id_db = await this._createPaymentInDB(venta_id, 'MP_QR', Number(total));
