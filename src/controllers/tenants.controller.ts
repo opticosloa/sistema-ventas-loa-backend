@@ -15,19 +15,19 @@ export class TenantsController {
     }
 
     public async createTenant(req: Request, res: Response) {
-        const { nombre, encargado, direccion, telefono, email, mp_public_key, mp_access_token }: Sucursal = req.body;
+        const { nombre, encargado, direccion, telefono, email, mp_public_key, mp_access_token, mp_user_id }: Sucursal = req.body;
 
         try {
-            // SP Signature: p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_mp_public_key, p_mp_access_token
-            // Note: is_active is NOT in the provided SP for create. Encargado is UUID.
+            // SP Signature: p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_mp_public_key, p_mp_access_token, p_mp_user_id
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_crear', [
                 nombre,
-                encargado || null, // Ensure empty string becomes null for UUID safety
+                encargado || null,
                 direccion,
                 telefono,
                 email,
                 mp_public_key || null,
-                mp_access_token || null
+                mp_access_token || null,
+                mp_user_id || null
             ]);
             res.json({ success: true, result });
         } catch (error) {
@@ -59,12 +59,10 @@ export class TenantsController {
 
     public async updateTenant(req: Request, res: Response) {
         const { id } = req.params;
-        const { nombre, encargado, direccion, telefono, email, is_active, mp_public_key, mp_access_token, color_identificativo }: Sucursal = req.body;
+        const { nombre, encargado, direccion, telefono, email, is_active, mp_public_key, mp_access_token, color_identificativo, mp_user_id }: Sucursal = req.body;
 
         try {
-            // SP Signature provided by user: p_sucursal_id, p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_is_active
-            // WARNING: The provided SP does NOT accept mp_public_key or mp_access_token.
-            // But wait, the previous turn I implemented updateTenant. I should just ensure it stays correctly.
+            // SP Signature: p_sucursal_id, p_nombre, p_encargado, p_direccion, p_telefono, p_email, p_is_active, p_mp_public_key, p_mp_access_token, p_color_identificativo, p_mp_user_id
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_editar', [
                 id,
                 nombre,
@@ -73,9 +71,10 @@ export class TenantsController {
                 telefono,
                 email,
                 is_active,
-                mp_public_key,
-                mp_access_token,
-                color_identificativo
+                mp_public_key || null,
+                mp_access_token || null,
+                color_identificativo,
+                mp_user_id || null
             ]);
             res.json({ success: true, result });
         } catch (error) {

@@ -1,5 +1,5 @@
 export interface Sucursal {
-    sucursal_id?: string;
+    sucursal_id: string;
     nombre: string;
     encargado: string;
     direccion: string;
