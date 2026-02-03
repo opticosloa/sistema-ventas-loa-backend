@@ -446,9 +446,23 @@ export class UsersController {
 
     public async moveUser(req: Request, res: Response) {
         const { usuario_id, sucursal_id } = req.body;
+        const admin_id = req.user?.id; // Assuming authMiddleware populates req.user
+
         try {
-            await PostgresDB.getInstance().callStoredProcedure('sp_usuario_cambiar_sucursal', [usuario_id, sucursal_id]);
-            res.json({ success: true, message: 'Usuario movido exitosamente' });
+            if (!admin_id) {
+                return res.status(401).json({ success: false, error: 'No autorizado' });
+            }
+
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_cambiar_sucursal', [usuario_id, sucursal_id, admin_id]);
+
+            // The SP returns a JSON object directly
+            const response = result.rows[0]?.sp_usuario_cambiar_sucursal;
+
+            if (response && response.success) {
+                res.json({ success: true, message: response.message });
+            } else {
+                res.status(400).json({ success: false, error: response?.message || 'Error al mover usuario' });
+            }
         } catch (error) {
             console.error(error);
             res.status(500).json({ success: false, error });
@@ -484,17 +498,7 @@ export class UsersController {
     public async getSchedule(req: Request, res: Response) {
         const { id } = req.params;
         try {
-            const query = `
-                SELECT 
-                    uc.cronograma_id,
-                    uc.dia_semana,
-                    uc.sucursal_id,
-                    s.nombre as sucursal_nombre
-                FROM usuario_cronograma uc
-                JOIN sucursales s ON uc.sucursal_id = s.sucursal_id
-                WHERE uc.usuario_id = $1
-            `;
-            const result = await PostgresDB.getInstance().executeQuery(query, [id]);
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_cronograma', [id]);
             res.json({ success: true, result: result.rows });
         } catch (error) {
             console.error(error);
