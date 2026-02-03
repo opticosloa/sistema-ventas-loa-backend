@@ -147,7 +147,7 @@ export class UsersController {
             }
 
             const userData = user.rows[0];
-            console.log(userData)
+            // console.log(userData)
             const isPasswordValid = bcrypt.compareSync(password, userData.password_hash);
             if (!isPasswordValid) {
                 return res.status(400).json({ success: false, error: 'Usuario o contraseña incorrectos' });
@@ -157,7 +157,16 @@ export class UsersController {
                 return res.status(400).json({ success: false, error: 'Usuario inactivo' });
             }
 
+            // Calculate current branch based on schedule
+            const branchResult = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_calcular_sucursal_actual', [userData.usuario_id]);
+            const currentSucursalId = branchResult.rows[0]?.sp_usuario_calcular_sucursal_actual; // Adjust key if necessary based on SP return
+
+            if (!currentSucursalId) {
+                return res.status(400).json({ success: false, error: 'Usuario sin sucursal asignada asignada. Contacte al administrador.' });
+            }
+
             const { password_hash, ...userWithoutPassword } = userData;
+            userWithoutPassword.sucursal_id = currentSucursalId;
 
             const token = jwt.sign({
                 id: userData.usuario_id,
@@ -165,7 +174,7 @@ export class UsersController {
                 rol: userData.rol,
                 nombre: userData.nombre,
                 apellido: userData.apellido,
-                sucursal_id: userData.sucursal_id,
+                sucursal_id: currentSucursalId,
                 max_descuento: userData.max_descuento
             },
                 envs.JWT_SECRET, { expiresIn: '16h' });
@@ -429,6 +438,64 @@ export class UsersController {
             ]);
 
             res.json({ success: true, message: 'Max descuento actualizado correctamente' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async moveUser(req: Request, res: Response) {
+        const { usuario_id, sucursal_id } = req.body;
+        try {
+            await PostgresDB.getInstance().callStoredProcedure('sp_usuario_cambiar_sucursal', [usuario_id, sucursal_id]);
+            res.json({ success: true, message: 'Usuario movido exitosamente' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async setSchedule(req: Request, res: Response) {
+        const { usuario_id, dia, sucursal_id } = req.body;
+        try {
+            await PostgresDB.getInstance().callStoredProcedure('sp_usuario_set_cronograma', [usuario_id, dia, sucursal_id]);
+            res.json({ success: true, message: 'Cronograma actualizado' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async deleteScheduleRule(req: Request, res: Response) {
+        const { usuario_id, dia } = req.params;
+        try {
+            if (!dia) return res.status(400).json({ success: false, error: 'Dia no válido' });
+            if (!usuario_id) return res.status(400).json({ success: false, error: 'Usuario no válido' });
+
+            await PostgresDB.getInstance().callStoredProcedure('sp_usuario_del_cronograma', [usuario_id, parseInt(dia)]);
+
+            res.json({ success: true, message: 'Regla eliminada' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async getSchedule(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+            const query = `
+                SELECT 
+                    uc.cronograma_id,
+                    uc.dia_semana,
+                    uc.sucursal_id,
+                    s.nombre as sucursal_nombre
+                FROM usuario_cronograma uc
+                JOIN sucursales s ON uc.sucursal_id = s.sucursal_id
+                WHERE uc.usuario_id = $1
+            `;
+            const result = await PostgresDB.getInstance().executeQuery(query, [id]);
+            res.json({ success: true, result: result.rows });
         } catch (error) {
             console.error(error);
             res.status(500).json({ success: false, error });

@@ -24,7 +24,9 @@ router.put('/:id', controller.updateUser.bind(controller));
 router.delete('/:id', controller.deleteUser.bind(controller));
 router.put('/:id/max-descuento', controller.updateMaxDescuento.bind(controller));
 
-
-
+router.post('/move', controller.moveUser.bind(controller));
+router.post('/schedule', controller.setSchedule.bind(controller));
+router.delete('/:usuario_id/schedule/:dia', controller.deleteScheduleRule.bind(controller));
+router.get('/:id/schedule', controller.getSchedule.bind(controller));
 
 export default router;
