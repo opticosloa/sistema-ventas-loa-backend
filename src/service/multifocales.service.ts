@@ -21,38 +21,68 @@ export class MultifocalesService {
 
     public async upsert(data: {
         id?: string;
-        marca: string;
-        modelo: string;
+        modelo_id: string;
         material: string;
-        tratamiento: string;
-        esfera_desde: number;
-        esfera_hasta: number;
-        cilindro_desde: number;
-        cilindro_hasta: number;
+        tratamiento?: string;
         precio: number;
-        costo: number;
+        costo?: number;
     }) {
         const {
-            id, marca, modelo, material, tratamiento,
-            esfera_desde, esfera_hasta, cilindro_desde, cilindro_hasta,
+            id, modelo_id, material, tratamiento,
             precio, costo
         } = data;
 
-        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_upsert', [
+        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_upsert_catalogo', [
             id || null,
-            marca,
-            modelo,
+            modelo_id,
             material,
             tratamiento || null,
-            Number(esfera_desde),
-            Number(esfera_hasta),
-            Number(cilindro_desde),
-            Number(cilindro_hasta),
             Number(precio),
             Number(costo || 0)
         ]);
 
         return result.rows[0];
+    }
+
+    public async adjustStock(data: {
+        multifocal_id: string;
+        sucursal_id: string;
+        esfera: number;
+        cilindro: number;
+        adicion: number;
+        cantidad: number;
+    }) {
+        const { multifocal_id, sucursal_id, esfera, cilindro, adicion, cantidad } = data;
+
+        // sp_multifocal_movimiento_stock returns boolean
+        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_movimiento_stock', [
+            multifocal_id,
+            sucursal_id,
+            esfera,
+            cilindro,
+            adicion,
+            cantidad
+        ]);
+
+        return result.rows[0];
+    }
+
+    public async searchStock(data: {
+        sucursal_id: string;
+        esfera: number;
+        cilindro: number;
+        adicion: number;
+    }) {
+        const { sucursal_id, esfera, cilindro, adicion } = data;
+
+        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_buscar_stock', [
+            sucursal_id,
+            esfera,
+            cilindro,
+            adicion
+        ]);
+
+        return result.rows;
     }
     // --- MARCAS ---
     public async getBrands() {

@@ -7,6 +7,8 @@ const controller = MultifocalesController.getInstance();
 
 router.get('/search', authMiddleware, controller.search.bind(controller));
 router.post('/upsert', authMiddleware, controller.upsert.bind(controller));
+router.post('/stock/adjustment', authMiddleware, controller.adjustStock.bind(controller));
+router.get('/search/stock', authMiddleware, controller.searchStock.bind(controller));
 
 // Marcas
 router.get('/brands', authMiddleware, controller.getBrands.bind(controller));
