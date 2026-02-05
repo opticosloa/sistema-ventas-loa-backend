@@ -22,67 +22,26 @@ export class MultifocalesService {
     public async upsert(data: {
         id?: string;
         modelo_id: string;
-        material: string;
-        tratamiento?: string;
+        material_id: string;
+        tratamiento_id?: string;
         precio: number;
         costo?: number;
     }) {
         const {
-            id, modelo_id, material, tratamiento,
+            id, modelo_id, material_id, tratamiento_id,
             precio, costo
         } = data;
 
-        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_upsert_catalogo', [
+        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_upsert', [
             id || null,
             modelo_id,
-            material,
-            tratamiento || null,
+            material_id,
+            tratamiento_id || null, // Optional
             Number(precio),
             Number(costo || 0)
         ]);
 
         return result.rows[0];
-    }
-
-    public async adjustStock(data: {
-        multifocal_id: string;
-        sucursal_id: string;
-        esfera: number;
-        cilindro: number;
-        adicion: number;
-        cantidad: number;
-    }) {
-        const { multifocal_id, sucursal_id, esfera, cilindro, adicion, cantidad } = data;
-
-        // sp_multifocal_movimiento_stock returns boolean
-        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_movimiento_stock', [
-            multifocal_id,
-            sucursal_id,
-            esfera,
-            cilindro,
-            adicion,
-            cantidad
-        ]);
-
-        return result.rows[0];
-    }
-
-    public async searchStock(data: {
-        sucursal_id: string;
-        esfera: number;
-        cilindro: number;
-        adicion: number;
-    }) {
-        const { sucursal_id, esfera, cilindro, adicion } = data;
-
-        const result = await PostgresDB.getInstance().callStoredProcedure('sp_multifocal_buscar_stock', [
-            sucursal_id,
-            esfera,
-            cilindro,
-            adicion
-        ]);
-
-        return result.rows;
     }
     // --- MARCAS ---
     public async getBrands() {

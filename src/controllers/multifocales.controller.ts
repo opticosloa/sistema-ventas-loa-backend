@@ -33,9 +33,9 @@ export class MultifocalesController {
     public async upsert(req: Request, res: Response) {
         try {
             const data = req.body;
-            // Validaciones básicas
-            if (!data.modelo_id || !data.precio) {
-                return res.status(400).json({ success: false, error: "Modelo y Precio son obligatorios" });
+            // Validations
+            if (!data.modelo_id || !data.material_id || !data.precio) {
+                return res.status(400).json({ success: false, error: "Modelo, Material y Precio son obligatorios" });
             }
 
             const result = await this.service.upsert(data);
@@ -50,46 +50,7 @@ export class MultifocalesController {
         }
     }
 
-    public async adjustStock(req: Request, res: Response) {
-        try {
-            const { multifocal_id, sucursal_id, esfera, cilindro, adicion, cantidad } = req.body;
-
-            if (!multifocal_id || !sucursal_id || esfera === undefined || cilindro === undefined || adicion === undefined || !cantidad) {
-                return res.status(400).json({ success: false, error: "Faltan datos requeridos para el movimiento de stock" });
-            }
-
-            const result = await this.service.adjustStock({
-                multifocal_id, sucursal_id, esfera, cilindro, adicion, cantidad
-            });
-
-            return res.json({ success: true, result });
-        } catch (error: any) {
-            console.error("Error adjusting stock:", error);
-            return res.status(500).json({ success: false, error: error.message });
-        }
-    }
-
-    public async searchStock(req: Request, res: Response) {
-        try {
-            const { sucursal_id, esfera, cilindro, adicion } = req.query;
-
-            if (!sucursal_id || esfera === undefined || cilindro === undefined || adicion === undefined) {
-                return res.status(400).json({ success: false, error: "Sucursal y graduación son requeridos" });
-            }
-
-            const result = await this.service.searchStock({
-                sucursal_id: String(sucursal_id),
-                esfera: Number(esfera),
-                cilindro: Number(cilindro),
-                adicion: Number(adicion)
-            });
-
-            return res.json({ success: true, result });
-        } catch (error: any) {
-            console.error("Error searching stock:", error);
-            return res.status(500).json({ success: false, error: error.message });
-        }
-    }
+    // Legacy stock endpoints removed.
 
     public async getBrands(req: Request, res: Response) {
         try {
