@@ -48,11 +48,15 @@ export class ProductsController {
                 const params: any[] = [];
 
                 if (tipo) {
-                    query += ' AND tipo = $1';
-                    params.push((tipo as string).toUpperCase());
+                    // FIX 1: Convertir "ARMAZON,ANTEOJO_SOL" en un array ['ARMAZON', 'ANTEOJO_SOL']
+                    const tiposArray = (tipo as string).split(',').map(t => t.trim().toUpperCase());
+
+                    // FIX 2: Usar 'ANY($1)' para filtrar por múltiples tipos
+                    query += ' AND p.tipo = ANY($1)';
+                    params.push(tiposArray);
                 }
 
-                query += ' ORDER BY nombre ASC';
+                query += ' ORDER BY p.nombre ASC';
 
                 result = await PostgresDB.getInstance().executeQuery(query, params);
                 res.json({ success: true, result: result.rows || result });
