@@ -39,7 +39,12 @@ export class ProductsController {
                 res.json({ success: true, result: rows });
             } else {
                 // Fallback / legacy logic
-                let query = 'SELECT * FROM productos WHERE is_active = true';
+                let query = `
+                    SELECT p.*, m.nombre as marca 
+                    FROM productos p
+                    LEFT JOIN marcas m ON p.marca_id = m.marca_id
+                    WHERE p.is_active = true
+                `;
                 const params: any[] = [];
 
                 if (tipo) {
