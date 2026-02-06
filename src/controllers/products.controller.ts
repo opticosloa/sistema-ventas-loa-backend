@@ -124,10 +124,14 @@ export class ProductsController {
 
     public async updateProducto(req: Request, res: Response) {
         const { id } = req.params;
-        const { nombre, descripcion, tipo, marca_id, precio_costo, precio_venta, iva, stock, stock_minimo, ubicacion, is_active
-        }: Product = req.body;
+        const {
+            nombre, descripcion, tipo, marca_id, precio_costo, precio_venta,
+            iva, stock, stock_minimo, ubicacion, is_active,
+            stock_por_sucursal // New param: Array of { sucursal_id, cantidad }
+        }: any = req.body;
 
         try {
+            // 1. Update Product Details
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_producto_editar', [
                 id,
                 nombre,
@@ -137,11 +141,21 @@ export class ProductsController {
                 precio_costo,
                 precio_venta,
                 iva,
-                stock,
+                stock, // This might be total legacy stock, or ignored by SP depending on implementation
                 stock_minimo,
                 ubicacion,
                 is_active
             ]);
+
+            // 2. Update Stock Distribution (Direct Update/Override)
+            if (stock_por_sucursal && Array.isArray(stock_por_sucursal) && stock_por_sucursal.length > 0) {
+                await PostgresDB.getInstance().callStoredProcedure('sp_producto_asignar_stock_masivo', [
+                    id,
+                    JSON.stringify(stock_por_sucursal),
+                    false // es_cristal default false for standard products
+                ]);
+            }
+
             res.json({ success: true, result });
         } catch (error) {
             console.log(error);
