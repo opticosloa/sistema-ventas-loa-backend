@@ -42,8 +42,18 @@ app.use((req, res, next) => {
     next();
   }
 });
+// --- CONFIGURACIÓN DE LÍMITES DE PAYLOAD ---
 
-app.use(express.json());
+// 1. Excepción: Límite extendido solo para Bulk Upsert (50MB)
+// Nota: Asegúrate de que esta ruta coincida exactamente con la que usa tu API
+app.use('/api/products/bulk-upsert', express.json({ limit: '60mb' }));
+app.use('/api/products/bulk-upsert', express.urlencoded({ limit: '60mb', extended: true }));
+
+// 2. Regla General: Límite estricto para todas las demás rutas (1MB)
+// Esto protege tu servidor de ataques de saturación en el resto de los endpoints
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
+
 app.use(cookieParser());
 
 // Configurar Google Vision Client
