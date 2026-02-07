@@ -130,10 +130,6 @@ export class SalesPdfController {
         const fechaRecibido = new Date(venta.created_at).toLocaleDateString('es-AR');
         const fechaPrometido = ticket?.fecha_entrega_estimada ? new Date(ticket.fecha_entrega_estimada).toLocaleDateString('es-AR') : '---';
 
-        const armazonNombre = items.find((i: any) =>
-            (i.categoria === 'ARMAZON') || (i.producto_nombre || '').toLowerCase().includes('armaz')
-        )?.producto_nombre || '---';
-
         let y = startY;
 
         // --- HEADER ---
@@ -204,13 +200,47 @@ export class SalesPdfController {
         y += tableHeight + 10; // Use calculated height + padding
 
         // --- INFO ADICIONAL ---
-        doc.fontSize(9).font('Helvetica-Bold').text('Armazón: ', 40, y, { continued: true })
-            .font('Helvetica').text(`${armazonNombre}`);
-        y += 14; // Reduced from 15
+        if (receta?.multifocal) {
+            doc.font('Helvetica-Bold').text('Multifocal: ', 40, y, { continued: true })
+                .font('Helvetica').text(`${val(receta.multifocal.tipo)} | Altura: ${val(receta.multifocal.altura)}`);
+            y += 14;
 
-        doc.font('Helvetica-Bold').text('Multifocal: ', 40, y, { continued: true })
-            .font('Helvetica').text(`${val(receta?.multifocal?.tipo)} | Altura: ${val(receta?.multifocal?.altura)}`);
-        y += 18; // Reduced from 20
+            const armazonMulti = receta.multifocal.armazon?.nombre;
+            if (armazonMulti) {
+                doc.font('Helvetica-Bold').text('Armazón Multifocal: ', 40, y, { continued: true })
+                    .font('Helvetica').text(armazonMulti);
+                y += 18;
+            }
+        } else {
+            // If no multifocal object, skip or print placeholder if desired? 
+            // Current logic seemed to print it always. User request implies "Si la receta es multifocal".
+            // We will stick to printing the basic line if it was there, but safer to just print if data exists 
+            // OR follow the user strict "Si la receta es multifocal". 
+            // To be less disruptive, let's keep the original "Multifocal" line if we want, 
+            // but I'll assume if it's null we might not want to clutter. 
+            // However, the original code printed it unconditionally. 
+            // Let's print the generic line if we are unsure, but checking 'receta.multifocal' is safer.
+            // I'll stick to: print existing line logic, then add armazon line.
+
+            doc.font('Helvetica-Bold').text('Multifocal: ', 40, y, { continued: true })
+                .font('Helvetica').text(`${val(receta?.multifocal?.tipo)} | Altura: ${val(receta?.multifocal?.altura)}`);
+            y += 14;
+
+            // Check if it really looks like a multifocal recipe before adding the armazon line?
+            // The user said: "Si la receta es multifocal, mostrar el armazón asociado."
+            // I'll show it if receta.multifocal exists or just default to empty/Sin Armazon if we are in this block.
+            // Actually, the structure suggests 'multifocal: { ... }'. 
+            const armazonMulti = receta?.multifocal?.armazon?.nombre || 'Sin Armazón';
+            // Only show "Armazón Multifocal" if there is some indication of multifocal data OR if we want to be explicit.
+            // The user request says "Si la receta es multifocal", ensuring we don't show "Armazón Multifocal: Sin Armazón" for a pure Lejos recipe.
+            // I'll check if receta?.multifocal has data.
+            if (receta?.multifocal?.tipo || receta?.multifocal?.armazon) {
+                doc.font('Helvetica-Bold').text('Armazón Multifocal: ', 40, y, { continued: true })
+                    .font('Helvetica').text(armazonMulti);
+                y += 14;
+            }
+            y += 4; // Spacing
+        }
 
         doc.fontSize(8).font('Helvetica-Oblique').text(`Observaciones: ${val(venta.observaciones)}`, 40, y);
 
@@ -242,74 +272,90 @@ export class SalesPdfController {
         const xCil = 180;
         const xEje = 240;
         const xTipo = 300;
-        const xTratamiento = 390; // Nueva columna
+        const xTratamiento = 390;
         const xDNPLabel = 480;
         const xDNPVal = 510;
 
-        const rowHeight = 16; // Reduced from 20
+        const rowHeight = 16;
         let currentY = startY;
 
-        // Headers implícitos o bordes
-        // Dibujamos el borde exterior
-        // Lejos Row 1 (OD)
+        // --- LEJOS ---
+        // Linea Superior
+        doc.lineWidth(0.5).strokeColor('#aaa');
+        doc.moveTo(xLejosCerca, currentY).lineTo(550, currentY).stroke();
+
+        // Row 1 (OD)
         this.drawGradCell(doc, xLejosCerca, currentY, 'Lejos', true, true);
         this.drawGradCell(doc, xOjo, currentY, 'O.D.', true);
         this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.lejos?.OD?.esfera)}`);
         this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.lejos?.OD?.cilindro)}`);
         this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.lejos?.OD?.eje)}°`);
 
-        // Tipo Lejos (spans 2 rows)
+        // Merged Cells Lejos
         doc.fontSize(8).text(`Tipo: ${val(receta?.lejos?.tipo)}`, xTipo, currentY + 10);
-
-        // Tratamiento Lejos (spans 2 rows)
         doc.fontSize(8).text(`Trat.: ${val(receta?.lejos?.color)}`, xTratamiento, currentY + 10);
-
-        // DNP Lejos (spans 2 rows)
         doc.fontSize(7).text('DNP', xDNPLabel, currentY + 10, { align: 'center', width: 30 });
         doc.fontSize(9).text(val(receta?.lejos?.dnp), xDNPVal, currentY + 10, { align: 'center', width: 40 });
 
         currentY += rowHeight;
 
-        // Lejos Row 2 (OI)
+        // Row 2 (OI)
         this.drawGradCell(doc, xOjo, currentY, 'O.I.', true);
         this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.lejos?.OI?.esfera)}`);
         this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.lejos?.OI?.cilindro)}`);
         this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.lejos?.OI?.eje)}°`);
 
-        currentY += rowHeight + 4; // spacing reduced from 5
+        currentY += rowHeight + 4;
 
-        // Cerca Row 1 (OD)
+        // Armazón Lejos
+        const armazonLejos = receta?.lejos?.armazon?.nombre;
+        if (armazonLejos) {
+            doc.fontSize(9).font('Helvetica-Bold').text('Armazón Lejos: ', 40, currentY, { continued: true })
+                .font('Helvetica').text(armazonLejos);
+            currentY += 14;
+        }
+
+        // Linea Media (Separador Lejos/Cerca)
+        doc.lineWidth(0.5).strokeColor('#aaa');
+        doc.moveTo(xLejosCerca, currentY).lineTo(550, currentY).stroke();
+
+        // --- CERCA ---
+        // Row 1 (OD)
         this.drawGradCell(doc, xLejosCerca, currentY, 'Cerca', true, true);
         this.drawGradCell(doc, xOjo, currentY, 'O.D.', true);
         this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.cerca?.OD?.esfera)}`);
         this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.cerca?.OD?.cilindro)}`);
         this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.cerca?.OD?.eje)}°`);
 
-        // Tipo Cerca (spans 2 rows)
+        // Merged Cells Cerca
         doc.fontSize(8).font('Helvetica').text(`Tipo: ${val(receta?.cerca?.tipo)}`, xTipo, currentY + 10);
-
-        // Tratamiento Cerca (spans 2 rows)
         doc.fontSize(8).font('Helvetica').text(`Trat.: ${val(receta?.cerca?.color)}`, xTratamiento, currentY + 10);
-
-        // DNP Cerca (spans 2 rows)
         doc.fontSize(7).text('DNP', xDNPLabel, currentY + 10, { align: 'center', width: 30 });
         doc.fontSize(9).text(val(receta?.cerca?.dnp), xDNPVal, currentY + 10, { align: 'center', width: 40 });
 
         currentY += rowHeight;
 
-        // Cerca Row 2 (OI)
+        // Row 2 (OI)
         this.drawGradCell(doc, xOjo, currentY, 'O.I.', true);
         this.drawGradCell(doc, xEsf, currentY, `Esf: ${val(receta?.cerca?.OI?.esfera)}`);
         this.drawGradCell(doc, xCil, currentY, `Cil: ${val(receta?.cerca?.OI?.cilindro)}`);
         this.drawGradCell(doc, xEje, currentY, `En: ${val(receta?.cerca?.OI?.eje)}°`);
 
-        // Líneas horizontales de separación
-        doc.lineWidth(0.5).strokeColor('#aaa');
-        doc.moveTo(xLejosCerca, startY).lineTo(550, startY).stroke(); // Top
-        doc.moveTo(xLejosCerca, startY + rowHeight * 2).lineTo(550, startY + rowHeight * 2).stroke(); // Mid (after Lejos)
-        doc.moveTo(xLejosCerca, startY + rowHeight * 4 + 4).lineTo(550, startY + rowHeight * 4 + 4).stroke(); // Bottom
+        currentY += rowHeight + 4;
 
-        return (currentY + rowHeight) - startY; // Return approx height used
+        // Armazón Cerca
+        const armazonCerca = receta?.cerca?.armazon?.nombre;
+        if (armazonCerca) {
+            doc.fontSize(9).font('Helvetica-Bold').text('Armazón Cerca: ', 40, currentY, { continued: true })
+                .font('Helvetica').text(armazonCerca);
+            currentY += 14;
+        }
+
+        // Linea Inferior
+        doc.lineWidth(0.5).strokeColor('#aaa');
+        doc.moveTo(xLejosCerca, currentY).lineTo(550, currentY).stroke();
+
+        return (currentY) - startY;
     }
 
     private drawGradCell(doc: PDFKit.PDFDocument, x: number, y: number, text: string, bold = false, big = false) {
