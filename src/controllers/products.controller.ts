@@ -338,10 +338,26 @@ export class ProductsController {
                 return res.status(400).json({ success: false, error: 'Cotización del dólar no configurada o inválida (0).' });
             }
 
-            // 2. Call the Master SP
-            // sp_productos_importar_excel_master(p_items jsonb, p_dolar_rate numeric)
+            const processedItems = items.map((item: any) => {
+                const sugeridoArs = Number(item.precio_venta || 0);
+
+                // Calcular USD usando el sugerido
+                let calculatedUsd = 0;
+                if (sugeridoArs > 0) {
+                    calculatedUsd = Number((sugeridoArs / dolarRate).toFixed(2));
+                }
+
+                return {
+                    ...item,
+                    // Enviamos el precio_usd explícito para que el SP lo use
+                    precio_usd: calculatedUsd,
+                    // Eliminamos precio_venta para no ensuciar la DB
+                    precio_venta: null
+                };
+            });
+
             const result = await db.callStoredProcedure('sp_productos_importar_excel_master', [
-                JSON.stringify(items),
+                JSON.stringify(processedItems),
                 dolarRate
             ]);
 
