@@ -22,21 +22,25 @@ export class ProductsController {
             let result;
 
             if (sucursal_id) {
-                // SP: p_sucursal_id, p_solo_activos
-                // Returns: producto_id, nombre, codigo_qr, precio_venta, stock_sucursal, stock_total, ubicacion_local
                 result = await PostgresDB.getInstance().callStoredProcedure('sp_productos_listar_por_sucursal', [
                     sucursal_id,
-                    true // p_solo_activos default true
+                    true
                 ]);
 
-                // Map result to match expected frontend interface (Produto.stock)
-                // If the SP returns stock_sucursal, we map it to 'stock' property for compatibility
-                const rows = (result.rows || result).map((p: any) => ({
+                let rows = (result.rows || result);
+
+                // NUEVO: Filtrar por tipo en el servidor (JS) ya que el SP actual no lo filtra
+                if (tipo) {
+                    const tiposArray = (tipo as string).split(',').map(t => t.trim().toUpperCase());
+                    rows = rows.filter((p: any) => tiposArray.includes(p.tipo?.toUpperCase()));
+                }
+
+                const finalRows = rows.map((p: any) => ({
                     ...p,
-                    stock: p.stock_sucursal // Override logic stock with branch stock
+                    stock: p.stock_sucursal
                 }));
 
-                res.json({ success: true, result: rows });
+                return res.json({ success: true, result: finalRows });
             } else {
                 // Fallback / legacy logic
                 let query = `
