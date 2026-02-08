@@ -24,9 +24,7 @@ export class CrystalsController {
                 cilindro_max,
                 precio_usd,
                 precio_costo,
-                stock_inicial,
-                stock_minimo,
-                ubicacion
+                p_sucursales_data // Expecting JSON array
             } = req.body;
 
             // Validación básica
@@ -35,8 +33,7 @@ export class CrystalsController {
             }
 
             // Llamada al SP sp_cristales_upsert_rango
-            // Nota: El orden de los parámetros debe coincidir EXACTAMENTE con el del SP SQL
-            // Asumimos que el SP ha sido actualizado para aceptar: precio_costo, stock_minimo, ubicacion
+            // New Signature: p_material, p_tratamiento, p_esfera_min, p_esfera_max, p_cilindro_min, p_cilindro_max, p_precio_usd, p_precio_costo, p_sucursales_data
             const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_cristales_upsert_rango', [
                 material,
                 tratamiento,
@@ -46,9 +43,7 @@ export class CrystalsController {
                 Number(cilindro_max),
                 Number(precio_usd),
                 Number(precio_costo || 0),
-                Number(stock_inicial || 0),
-                Number(stock_minimo || 2),
-                ubicacion || null
+                JSON.stringify(p_sucursales_data || [])
             ]);
 
             // El SP devuelve un entero (v_contador)
@@ -67,27 +62,20 @@ export class CrystalsController {
     }
 
     public async checkStock(req: Request, res: Response) {
-        const { esfera, cilindro, material, tratamiento } = req.query;
+        const { esfera, cilindro, material, tratamiento, sucursal_id } = req.query;
 
         // Validation
-        if (esfera === undefined || cilindro === undefined) {
-            return res.status(400).json({ success: false, message: "Esfera and Cilindro required" });
+        if (esfera === undefined || cilindro === undefined || !sucursal_id) {
+            return res.status(400).json({ success: false, message: "Esfera, Cilindro and Sucursal ID required" });
         }
 
         try {
-            // Flexible match for material/treatment which might be partial or ID-based in future.
-            // For now, exact match string.
-
-            // Handle numeric precision? 
-            // e.g. -2.00 vs -2. 
-            // Postgres numeric comparison should handle it if types are numeric.
-
-            // Ensure numeric types for SP
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_verificar', [
                 Number(esfera),
                 Number(cilindro),
                 material,
-                tratamiento
+                tratamiento,
+                String(sucursal_id)
             ]);
 
             if (result.rows.length > 0) {
@@ -99,6 +87,33 @@ export class CrystalsController {
         } catch (error) {
             console.error("Error checking crystal stock:", error);
             res.status(500).json({ success: false, error });
+        }
+    }
+
+    public async checkGlobalStock(req: Request, res: Response) {
+        const { esfera, cilindro, material, tratamiento } = req.query;
+
+        if (esfera === undefined || cilindro === undefined) {
+            return res.status(400).json({ success: false, message: "Esfera and Cilindro required" });
+        }
+
+        try {
+            // Calls sp_cristal_stock_global
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_global', [
+                Number(esfera),
+                Number(cilindro),
+                material,
+                tratamiento
+            ]);
+
+            return res.json({
+                success: true,
+                result: result.rows || []
+            });
+
+        } catch (error) {
+            console.error("Error checking global crystal stock:", error);
+            return res.status(500).json({ success: false, error: 'Error checking global stock' });
         }
     }
 

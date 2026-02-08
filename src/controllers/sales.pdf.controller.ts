@@ -200,52 +200,38 @@ export class SalesPdfController {
         y += tableHeight + 10; // Use calculated height + padding
 
         // --- INFO ADICIONAL ---
-        if (receta?.multifocal) {
+        if (receta?.multifocal?.tipo) {
+            // Line 1: Multifocal: [Tipo]
             doc.font('Helvetica-Bold').text('Multifocal: ', 40, y, { continued: true })
-                .font('Helvetica').text(`${val(receta.multifocal.tipo)} | Altura: ${val(receta.multifocal.altura)}`);
+                .font('Helvetica').text(val(receta.multifocal.tipo));
             y += 14;
 
-            const armazonMulti = receta.multifocal.armazon?.nombre;
-            if (armazonMulti) {
-                doc.font('Helvetica-Bold').text('Armazón Multifocal: ', 40, y, { continued: true })
-                    .font('Helvetica').text(armazonMulti);
-                y += 18;
-            }
-        } else {
-            // If no multifocal object, skip or print placeholder if desired? 
-            // Current logic seemed to print it always. User request implies "Si la receta es multifocal".
-            // We will stick to printing the basic line if it was there, but safer to just print if data exists 
-            // OR follow the user strict "Si la receta es multifocal". 
-            // To be less disruptive, let's keep the original "Multifocal" line if we want, 
-            // but I'll assume if it's null we might not want to clutter. 
-            // However, the original code printed it unconditionally. 
-            // Let's print the generic line if we are unsure, but checking 'receta.multifocal' is safer.
-            // I'll stick to: print existing line logic, then add armazon line.
+            // Line 2: Heights & D.I.
+            const altura = val(receta.multifocal.altura);
+            const diLejos = val(receta.multifocal.di_lejos);
+            const diCerca = val(receta.multifocal.di_cerca);
 
-            doc.font('Helvetica-Bold').text('Multifocal: ', 40, y, { continued: true })
-                .font('Helvetica').text(`${val(receta?.multifocal?.tipo)} | Altura: ${val(receta?.multifocal?.altura)}`);
+            // "Altura: [altura] mm | D.I. Lejos: [di_lejos] mm | D.I. Cerca: [di_cerca] mm"
+            doc.font('Helvetica').text(`Altura: ${altura} mm  |  D.I. Lejos: ${diLejos} mm  |  D.I. Cerca: ${diCerca} mm`, 40, y);
             y += 14;
 
-            // Check if it really looks like a multifocal recipe before adding the armazon line?
-            // The user said: "Si la receta es multifocal, mostrar el armazón asociado."
-            // I'll show it if receta.multifocal exists or just default to empty/Sin Armazon if we are in this block.
-            // Actually, the structure suggests 'multifocal: { ... }'. 
-            const armazonMulti = receta?.multifocal?.armazon?.nombre || 'Sin Armazón';
-            // Only show "Armazón Multifocal" if there is some indication of multifocal data OR if we want to be explicit.
-            // The user request says "Si la receta es multifocal", ensuring we don't show "Armazón Multifocal: Sin Armazón" for a pure Lejos recipe.
-            // I'll check if receta?.multifocal has data.
-            if (receta?.multifocal?.tipo || receta?.multifocal?.armazon) {
-                doc.font('Helvetica-Bold').text('Armazón Multifocal: ', 40, y, { continued: true })
-                    .font('Helvetica').text(armazonMulti);
+            // Line 3: Obs. Lab (Conditional)
+            if (receta.multifocal.observaciones) {
+                doc.font('Helvetica-Bold').text('Obs. Lab: ', 40, y, { continued: true })
+                    .font('Helvetica').text(receta.multifocal.observaciones);
                 y += 14;
             }
-            y += 4; // Spacing
+
+            // Line 4: Armazón Multifocal
+            const armazonMulti = receta.multifocal.armazon?.nombre || '---';
+            doc.font('Helvetica-Bold').text('Armazón Multifocal: ', 40, y, { continued: true })
+                .font('Helvetica').text(armazonMulti);
+            y += 18;
         }
 
         doc.fontSize(8).font('Helvetica-Oblique').text(`Observaciones: ${val(venta.observaciones)}`, 40, y);
 
         // Label Tipo (Original/Copia)
-        // Fixed position relative to startY to ensure consistence, but reduced offset
         // Was startY + 380. Now 30 (start) + 350 = 380 absolute for Original.
         // Copy: 440 (start) + 350 = 790 absolute. A4 height is ~841. Safe.
         doc.fontSize(6).font('Helvetica').text(label, 40, startY + 350, { align: 'right', width: 515 });
