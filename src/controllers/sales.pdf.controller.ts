@@ -200,14 +200,7 @@ export class SalesPdfController {
         y += tableHeight + 10; // Use calculated height + padding
 
         // --- INFO ADICIONAL ---
-        // Validar que no sea dato dummy "Prueba"
-        const multifocalTipo = receta?.multifocal?.tipo;
-        const isDummyMultifocal = multifocalTipo && (
-            multifocalTipo.includes('Prueba 1') ||
-            multifocalTipo.includes('Prueba 1.1')
-        );
-
-        if (multifocalTipo && !isDummyMultifocal && multifocalTipo.trim() !== '') {
+        if (receta?.multifocal?.tipo) {
             // Line 1: Multifocal: [Tipo]
             doc.font('Helvetica-Bold').text('Multifocal: ', 40, y, { continued: true })
                 .font('Helvetica').text(val(receta.multifocal.tipo));
