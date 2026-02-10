@@ -165,8 +165,13 @@ export class UsersController {
                 return res.status(400).json({ success: false, error: 'Usuario sin sucursal asignada asignada. Contacte al administrador.' });
             }
 
+            // Fetch Branch Name
+            const branchNameResult = await PostgresDB.getInstance().executeQuery('SELECT nombre FROM sucursales WHERE sucursal_id = $1', [currentSucursalId]);
+            const sucursalNombre = branchNameResult.rows[0]?.nombre || 'Sucursal Desconocida';
+
             const { password_hash, ...userWithoutPassword } = userData;
             userWithoutPassword.sucursal_id = currentSucursalId;
+            (userWithoutPassword as any).sucursal_nombre = sucursalNombre;
 
             const token = jwt.sign({
                 id: userData.usuario_id,
@@ -290,6 +295,10 @@ export class UsersController {
                 res.cookie('token', newToken, this.getCookieOptions());
             }
 
+            // Fetch Branch Name
+            const branchNameResult = await PostgresDB.getInstance().executeQuery('SELECT nombre FROM sucursales WHERE sucursal_id = $1', [currentUser.sucursal_id]);
+            const sucursalNombre = branchNameResult.rows[0]?.nombre || 'Sucursal Desconocida';
+
             res.json({
                 success: true,
                 user: {
@@ -299,6 +308,7 @@ export class UsersController {
                     nombre: currentUser.nombre,
                     apellido: currentUser.apellido,
                     sucursal_id: currentUser.sucursal_id,
+                    sucursal_nombre: sucursalNombre,
                     max_descuento: currentUser.max_descuento
                 },
                 token: newToken // Frontend can check if this exists and update storage
