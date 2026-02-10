@@ -255,19 +255,53 @@ export class UsersController {
                 return res.status(401).json({ success: false });
             }
 
-            const decoded = jwt.verify(token, envs.JWT_SECRET);
+            const decoded = jwt.verify(token, envs.JWT_SECRET) as any;
+
+            // 1. Fetch fresh user data to ensure role/status/branch are up to date
+            const userResult = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_get_by_id', [decoded.id]);
+
+            if (!userResult.rows || userResult.rows.length === 0) {
+                res.clearCookie('token', this.getCookieOptions());
+                return res.status(401).json({ success: false });
+            }
+
+            const currentUser = userResult.rows[0];
+
+            if (!currentUser.is_active) {
+                res.clearCookie('token', this.getCookieOptions());
+                return res.status(401).json({ success: false, error: 'Usuario inactivo' });
+            }
+
+            // 2. Check if branch changed
+            // If branch in token != branch in DB, issue NEW token
+            let newToken = null;
+            if (currentUser.sucursal_id !== decoded.sucursal_id) {
+                newToken = jwt.sign({
+                    id: currentUser.usuario_id,
+                    email: currentUser.email,
+                    rol: currentUser.rol,
+                    nombre: currentUser.nombre,
+                    apellido: currentUser.apellido,
+                    sucursal_id: currentUser.sucursal_id,
+                    max_descuento: currentUser.max_descuento
+                },
+                    envs.JWT_SECRET, { expiresIn: '16h' });
+
+                res.cookie('token', newToken, this.getCookieOptions());
+            }
 
             res.json({
                 success: true,
                 user: {
-                    id: (decoded as any).id,
-                    email: (decoded as any).email,
-                    rol: (decoded as any).rol,
-                    nombre: (decoded as any).nombre,
-                    apellido: (decoded as any).apellido,
-                    sucursal_id: (decoded as any).sucursal_id,
-                    max_descuento: (decoded as any).max_descuento
-                }
+                    id: currentUser.usuario_id,
+                    email: currentUser.email,
+                    rol: currentUser.rol,
+                    nombre: currentUser.nombre,
+                    apellido: currentUser.apellido,
+                    sucursal_id: currentUser.sucursal_id,
+                    max_descuento: currentUser.max_descuento
+                },
+                token: newToken // Frontend can check if this exists and update storage
             });
         } catch (error) {
             res.clearCookie('token', this.getCookieOptions());
@@ -446,11 +480,13 @@ export class UsersController {
 
     public async moveUser(req: Request, res: Response) {
         const { usuario_id, sucursal_id } = req.body;
-        const admin_id = req.user?.id; // Assuming authMiddleware populates req.user
+        const user = (req as any).user;
+        const admin_id = user?.id;
+        const admin_role = user?.rol;
 
         try {
-            if (!admin_id) {
-                return res.status(401).json({ success: false, error: 'No autorizado' });
+            if (!admin_id || !['ADMIN', 'SUPERADMIN'].includes(admin_role)) {
+                return res.status(403).json({ success: false, error: 'No autorizado. Requiere premisos de Administrador.' });
             }
 
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_usuario_cambiar_sucursal', [usuario_id, sucursal_id, admin_id]);

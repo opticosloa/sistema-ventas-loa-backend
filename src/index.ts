@@ -6,6 +6,7 @@ import vision from '@google-cloud/vision';
 import cookieParser from 'cookie-parser';
 import { AppRoutes } from './AppRoutes';
 import { envs } from './helpers/envs';
+import { BranchSchedulerService } from './service';
 
 
 
@@ -86,6 +87,7 @@ app.use(AppRoutes.routes);
 const port = envs.PORT || 10000;
 app.listen(port, () => {
   console.log('Server running on port:', port);
+  BranchSchedulerService.getInstance().initScheduledJobs();
 });
 
 // Una ruta simple de bienvenida y estado

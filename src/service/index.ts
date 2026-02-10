@@ -1,4 +1,5 @@
 
+export * from './branchScheduler.service'
 export * from './cash.pdf.service';
 export * from './multifocales.service';
 export * from './parce.service';
