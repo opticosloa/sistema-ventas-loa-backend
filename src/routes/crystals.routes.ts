@@ -12,6 +12,7 @@ router.post('/batch', controller.createBatchCristales.bind(controller));
 router.get('/check-stock', authMiddleware, controller.checkStock.bind(controller));
 router.get('/check-global-stock', authMiddleware, controller.checkGlobalStock.bind(controller)); // New Route
 router.get('/search-range', authMiddleware, controller.searchRange.bind(controller));
+router.get('/stock-details/:id', authMiddleware, controller.getStockDetails.bind(controller)); // New Route
 router.post('/update-prices-selectively', authMiddleware, controller.updatePricesSelectively.bind(controller));
 router.get('/price-check', controller.getPriceForSale.bind(controller));
 
@@ -20,11 +21,11 @@ router.get('/search', controller.searchCrystals.bind(controller));
 // Settings (Materials)
 router.get('/materials', settingsController.getMaterials.bind(settingsController));
 router.post('/materials', settingsController.createMaterial.bind(settingsController));
-router.put('/materials/:id', settingsController.updateMaterial.bind(settingsController)); // 👈 AGREGAR ESTA
+router.put('/materials/:id', settingsController.updateMaterial.bind(settingsController));
 
 // Settings (Treatments)
 router.get('/treatments', settingsController.getTreatments.bind(settingsController));
 router.post('/treatments', settingsController.createTreatment.bind(settingsController));
-router.put('/treatments/:id', settingsController.updateTreatment.bind(settingsController)); // 👈 AGREGAR ESTA
+router.put('/treatments/:id', settingsController.updateTreatment.bind(settingsController));
 
 export default router;

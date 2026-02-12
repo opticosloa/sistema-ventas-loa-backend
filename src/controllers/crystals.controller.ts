@@ -118,16 +118,18 @@ export class CrystalsController {
     }
 
     public async searchRange(req: Request, res: Response) {
-        const { esferaFrom, esferaTo, cilindroFrom, cilindroTo, material } = req.query;
+        const { esferaFrom, esferaTo, cilindroFrom, cilindroTo, material, sucursal_id } = req.query;
 
         try {
             // Llamada al nuevo Stored Procedure
+            // sp_cristal_stock_listar_rango(p_esfera_from, p_esfera_to, p_cilindro_from, p_cilindro_to, p_material, p_sucursal_id)
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_listar_rango', [
                 esferaFrom || '',
                 esferaTo || '',
                 cilindroFrom || '',
                 cilindroTo || '',
-                material || 'ALL'
+                material || 'ALL',
+                sucursal_id ? String(sucursal_id) : null // Nuevo parámetro
             ]);
 
             res.json({
@@ -137,6 +139,17 @@ export class CrystalsController {
 
         } catch (error: any) {
             console.error("❌ ERROR DETALLADO:", error.message, error.stack);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
+
+    public async getStockDetails(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cristal_stock_consultar_distribucion', [id]);
+            res.json({ success: true, result: result.rows });
+        } catch (error: any) {
+            console.error("Error getting crystal stock details:", error);
             res.status(500).json({ success: false, error: error.message });
         }
     }
