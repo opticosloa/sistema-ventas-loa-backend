@@ -12,4 +12,7 @@ export interface ObraSocial {
         porcentaje_cristales: number;
         porcentaje_armazones: number;
     };
+    es_interna?: boolean;
+    limite_cantidad_armazon?: number | null;
+    limite_cantidad_cristal?: number | null;
 }

@@ -34,7 +34,10 @@ export class ObrasSocialesService {
             data.cobertura || {},        // 7. p_cobertura
             data.cobertura_armazon_max || 0, // 8. p_cobertura_armazon_max
             data.cobertura_cristal_max || 0, // 9. p_cobertura_cristal_max
-            data.monto_cobertura_total || 0  // 10. p_monto_cobertura_total
+            data.monto_cobertura_total || 0, // 10. p_monto_cobertura_total
+            data.es_interna || false,        // 11. p_es_interna
+            data.limite_cantidad_armazon === undefined ? null : data.limite_cantidad_armazon, // 12
+            data.limite_cantidad_cristal === undefined ? null : data.limite_cantidad_cristal  // 13
         ]);
         return result.rows[0];
     }

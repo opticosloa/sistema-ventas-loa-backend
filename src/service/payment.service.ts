@@ -576,7 +576,32 @@ export class PaymentService {
     }
 
     public async createManualPayment(venta_id: string, metodo: string, monto: number, referencia: string | null = null) {
-        // 1. Create Payment
+
+        // 1. Check for Internal Social Work (Coverage by seller)
+        if (metodo === 'OBRA_SOCIAL' && referencia) {
+            try {
+                // Extract OS ID from string "ID_OS: <uuid> | ..." created in frontend
+                const match = referencia.match(/ID_OS:\s*([a-f0-9\-]+)/i);
+                if (match && match[1]) {
+                    const osId = match[1];
+                    const osResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_obra_social_get_by_id', [osId]);
+                    const osRows = osResult.rows || osResult;
+
+                    if (osRows && osRows.length > 0) {
+                        const os = osRows[0];
+                        if (os.es_interna) {
+                            console.log(`[Payment] Detectada Obra Social INTERNA (${os.nombre}). Cambiando método a OBRA_SOCIAL_VENDEDOR.`);
+                            metodo = 'OBRA_SOCIAL_VENDEDOR';
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn("[Payment] Error verificando Obra Social Interna:", error);
+                // Continue with original method on error
+            }
+        }
+
+        // 2. Create Payment
         const pago_id = await this._createPaymentInDB(venta_id, metodo, monto, referencia);
 
         // 2. Confirm Payment immediately

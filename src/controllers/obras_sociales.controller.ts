@@ -62,6 +62,9 @@ export class ObrasSocialesController {
                 monto_cobertura_total: Number(data.monto_cobertura_total) || 0,
                 cobertura_armazon_max: Number(data.cobertura_armazon_max) || 0,
                 cobertura_cristal_max: Number(data.cobertura_cristal_max) || 0,
+                es_interna: data.es_interna || false,
+                limite_cantidad_armazon: data.limite_cantidad_armazon === '' || data.limite_cantidad_armazon === null ? null : Number(data.limite_cantidad_armazon),
+                limite_cantidad_cristal: data.limite_cantidad_cristal === '' || data.limite_cantidad_cristal === null ? null : Number(data.limite_cantidad_cristal),
             };
 
             const result = await ObrasSocialesService.getInstance().upsert(payload);

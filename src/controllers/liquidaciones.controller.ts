@@ -20,7 +20,10 @@ export class LiquidacionesController {
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_liquidacion_items_pendientes', [
                 obra_social_id ? Number(obra_social_id) : null
             ]);
-            res.json({ success: true, result: result.rows || [] });
+            const rows = result.rows || [];
+            // Filter out internal coverage (Vendedor)
+            const filtered = rows.filter((item: any) => item.metodo !== 'OBRA_SOCIAL_VENDEDOR');
+            res.json({ success: true, result: filtered });
         } catch (error) {
             console.error("Error getting pending items:", error);
             res.status(500).json({ success: false, error });
