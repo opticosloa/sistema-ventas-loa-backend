@@ -56,6 +56,8 @@ export class PaymentService {
      * Throws an error if the branch does not have a configured token.
      */
     private async getMpClient(sucursal_id: string): Promise<{ client: MercadoPagoConfig, accessToken: string, publicKey: string }> {
+        console.log(`[getMpClient] Buscando configuracion para sucursal: ${sucursal_id}`);
+
         if (!sucursal_id) {
             throw new Error("Sucursal ID es requerido para configurar Mercado Pago.");
         }
@@ -63,11 +65,19 @@ export class PaymentService {
         const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
         const sucursalRows = sucursalResult.rows || sucursalResult;
 
+        console.log(`[getMpClient] Resultado DB:`, JSON.stringify(sucursalRows));
+
         if (!sucursalRows || sucursalRows.length === 0) {
             throw new Error(`Sucursal con ID ${sucursal_id} no encontrada.`);
         }
 
         const sucursal = sucursalRows[0];
+
+        console.log(`[getMpClient] Sucursal encontrada:`, {
+            id: sucursal.id,
+            nombre: sucursal.nombre,
+            tiene_token: !!sucursal.mp_access_token
+        });
 
         if (!sucursal.mp_access_token) {
             throw new Error(`La sucursal (${sucursal.nombre}) no tiene configurada una cuenta de Mercado Pago.`);
@@ -642,6 +652,7 @@ export class PaymentService {
     }
 
     public async createDynamicQR(total: number, sucursal_id: string, venta_id: string) {
+        console.log(`[createDynamicQR] Iniciando para venta: ${venta_id}, total: ${total}, sucursal: ${sucursal_id}`);
         try {
             if (!sucursal_id) {
                 throw new Error("Sucursal Id es requerido para DynamicQR");
