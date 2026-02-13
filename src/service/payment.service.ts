@@ -215,12 +215,12 @@ export class PaymentService {
                     },
                     location: {
                         street_number: "123",
-                        street_name: "Calle Principal",
-                        city_name: "Ciudad",
-                        state_name: "Estado",
+                        street_name: "Colon",
+                        city_name: "Lujan",
+                        state_name: "Buenos Aires",
                         latitude: -34.6037,
                         longitude: -58.3816,
-                        reference: "Centro"
+                        reference: "Sucursal"
                     }, // Default dummy location if not provided
                     external_id: "STORE_LOA_MAIN"
                 };
