@@ -51,18 +51,18 @@ export class PaymentService {
         return pago_id;
     }
 
-    public async createPayment(paymentData: Payment) {
-        const { venta_id, metodo, monto } = paymentData;
-        const pago_id = await this._createPaymentInDB(venta_id, metodo, monto);
-        return { success: true, pago_id };
-    }
+    /**
+     * Retrieves a configured MercadoPago client for a specific branch.
+     * Throws an error if the branch does not have a configured token.
+     */
+    private async getMpClient(sucursal_id: string): Promise<{ client: MercadoPagoConfig, accessToken: string, publicKey: string }> {
+        if (!sucursal_id) {
+            throw new Error("Sucursal ID es requerido para configurar Mercado Pago.");
+        }
 
-    public async createMercadoPagoPreference(venta_id: string, monto: number, title: string = 'Venta óptica', sucursal_id: string) {
-        // 1. Obtener datos de la sucursal (para el token)
         const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
         const sucursalRows = sucursalResult.rows || sucursalResult;
 
-        console.log(sucursalRows);
         if (!sucursalRows || sucursalRows.length === 0) {
             throw new Error(`Sucursal con ID ${sucursal_id} no encontrada.`);
         }
@@ -70,30 +70,46 @@ export class PaymentService {
         const sucursal = sucursalRows[0];
 
         if (!sucursal.mp_access_token) {
-            throw new Error(`La sucursal ${sucursal.nombre} no tiene configurado Mercado Pago (token faltante).`);
+            throw new Error(`La sucursal (${sucursal.nombre}) no tiene configurada una cuenta de Mercado Pago.`);
         }
 
-        // 2. Desencriptar Token y crear cliente Scoped
-        // Nota: Solo desencriptamos. El helper se encarga de checkear iv:content
+        // Desencriptar Token
         const accessToken = decrypt(sucursal.mp_access_token);
 
-        const scopedClient = new MercadoPagoConfig({
+        const client = new MercadoPagoConfig({
             accessToken: accessToken
         });
 
-        // 3. Crear el pago en DB (Local)
+        return {
+            client,
+            accessToken,
+            publicKey: sucursal.mp_public_key
+        };
+    }
+
+    public async createPayment(paymentData: Payment) {
+        const { venta_id, metodo, monto } = paymentData;
+        const pago_id = await this._createPaymentInDB(venta_id, metodo, monto);
+        return { success: true, pago_id };
+    }
+
+    public async createMercadoPagoPreference(venta_id: string, monto: number, title: string = 'Venta óptica', sucursal_id: string) {
+        // 1. Obtener Cliente MP de la Sucursal
+        const { client: scopedClient, publicKey } = await this.getMpClient(sucursal_id);
+
+        // 2. Crear el pago en DB (Local)
         const method = PaymentMethod.MP;
         const pago_id = await this._createPaymentInDB(venta_id, method, monto);
 
         // Limpiar URLs para evitar dobles barras
         const baseFront = envs.FRONT_URL.replace(/\/$/, "");
         const baseApi = envs.API_URL.replace(/\/$/, "");
-        // URL de notificación (Webhook). Agregamos preference_id=PENDING temporalmente
-        // URL de notificación (Webhook). Agregamos preference_id=PENDING temporalmente
-        // Y Agregamos sucursal_id para identificar el tenant en el webhook
-        const notificationUrl = `${baseApi}/api/payments/mercadopago/webhook?preference_id=PENDING&sucursal_id=${sucursal_id}`;
 
-        // 4. Crear Preferencia con el Cliente de la SUCURSAL
+        // URL de notificación (Webhook).
+        // Y Agregamos sucursal_id para identificar el tenant en el webhook
+        const notificationUrl = `${baseApi}/api/payments/mercadopago/webhook?sucursal_id=${sucursal_id}`;
+
+        // 3. Crear Preferencia con el Cliente de la SUCURSAL
         const preferenceClient = new Preference(scopedClient);
 
         const preferenceData = {
@@ -120,8 +136,6 @@ export class PaymentService {
             }
         };
 
-        // ELIMINAR METADATA SI CAUSA ERROR
-
         const mpResponse = await preferenceClient.create(preferenceData);
 
         // Actualizar el pago en DB con el ID real de la preferencia
@@ -136,7 +150,7 @@ export class PaymentService {
         return {
             init_point: mpResponse.init_point,
             preference_id: mpResponse.id,
-            public_key: sucursal.mp_public_key
+            public_key: publicKey
         };
     }
 
@@ -276,42 +290,31 @@ export class PaymentService {
     }
 
     public async createInStoreOrder(venta_id: string, monto: number, title: string = 'Venta óptica', sucursal_id?: string) {
+        if (!sucursal_id) {
+            throw new Error("Sucursal Id es requerido para InStoreOrder");
+        }
+
         const method = PaymentMethod.MP;
         const pago_id = await this._createPaymentInDB(venta_id, method, monto);
 
         // --- Credenciales Dinámicas ---
-        let access_token = envs.MP_ACCESS_TOKEN;
-        let userId: string;
-
-        // Si hay sucursal_id, intentamos usar sus credenciales
-        if (sucursal_id) {
-            try {
-                const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
-                const sucursal = sucursalResult.rows?.[0] || sucursalResult?.[0];
-                if (sucursal && sucursal.mp_access_token) {
-                    access_token = decrypt(sucursal.mp_access_token);
-                    console.log(`[QR] Usando credenciales de sucursal ${sucursal.nombre}`);
-                }
-            } catch (e) {
-                console.warn("Error obteniendo credenciales de sucursal para QR, usando fallback envs", e);
-            }
-        }
+        const { accessToken } = await this.getMpClient(sucursal_id);
 
         // 1. Obtener User ID dinámico (Usando el token determinado)
         // Nota: Si el token es de una cuenta distinta, el user_id será distinto.
         const meRes = await fetch('https://api.mercadopago.com/users/me', {
-            headers: { 'Authorization': `Bearer ${access_token}` }
+            headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
         console.log(meRes);
 
         if (!meRes.ok) throw new Error("Could not fetch MP User ID with provided token");
         const meData: any = await meRes.json();
-        userId = meData.id;
+        const userId = meData.id;
 
         // 2. Obtener/Validar POS
         // Pasamos el token explícitamente a _getOrCreatePOS para que cree el POS en la cuenta correcta
-        const externalPosId = await this._getOrCreatePOS(access_token, userId);
+        const externalPosId = await this._getOrCreatePOS(accessToken, userId);
 
         const url = `https://api.mercadopago.com/instore/qr/seller/collectors/${userId}/pos/${externalPosId}/orders`;
 
@@ -321,7 +324,7 @@ export class PaymentService {
         // Limpiar URL base
         const baseApi = envs.API_URL.replace(/\/$/, "");
         // Agregar sucursal_id si existe
-        const webhookQuery = sucursal_id ? `?sucursal_id=${sucursal_id}` : '';
+        const webhookQuery = `?sucursal_id=${sucursal_id}`;
 
         const payload = {
             external_reference: pago_id.toString(),
@@ -347,7 +350,7 @@ export class PaymentService {
         const response = await fetch(url, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
@@ -387,6 +390,9 @@ export class PaymentService {
     public async createPointPayment(venta_id: string, monto: number, device_id: string) {
         if (!device_id) throw new Error("Device ID is required for Point Payment");
         // 1. Create local payment reference
+        // Note: Point logic is complex to multi-tenant if devices are not mapped to tokens.
+        // Assuming global token or specific logic for now, or we need to pass sucursal_id.
+        // For now, keeping global logic or todo for point.
         const pago_id = await this._createPaymentInDB(venta_id, 'MP_POINT', monto);
 
         // 2. Create Payment Intent
@@ -465,14 +471,9 @@ export class PaymentService {
 
             if (sucursal_id) {
                 try {
-                    const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
-                    const sucursal = sucursalResult.rows?.[0] || sucursalResult?.[0];
-                    if (sucursal && sucursal.mp_access_token) {
-                        currentAccessToken = decrypt(sucursal.mp_access_token);
-                        console.log(`[Webhook] Usando credenciales de sucursal ID: ${sucursal_id}`);
-                    } else {
-                        console.warn(`[Webhook] Sucursal ID ${sucursal_id} no encontrada o sin token. Usando Global.`);
-                    }
+                    const { accessToken } = await this.getMpClient(sucursal_id);
+                    currentAccessToken = accessToken;
+                    console.log(`[Webhook] Usando credenciales de sucursal ID: ${sucursal_id}`);
                 } catch (e) {
                     console.error(`[Webhook] Error buscando sucursal ${sucursal_id}, usando Global. Error:`, e);
                     // No lanzamos error para mantener el flujo (fallback)
@@ -642,33 +643,23 @@ export class PaymentService {
 
     public async createDynamicQR(total: number, sucursal_id: string, venta_id: string) {
         try {
-            // --- Credenciales Dinámicas (Implementation similiar to createInStoreOrder) ---
-            let access_token = envs.MP_ACCESS_TOKEN;
-
-            // Si hay sucursal_id, intentamos usar sus credenciales
-            if (sucursal_id) {
-                try {
-                    const sucursalResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_sucursal_get_by_id', [sucursal_id]);
-                    const sucursal = sucursalResult.rows?.[0] || sucursalResult?.[0];
-                    if (sucursal && sucursal.mp_access_token) {
-                        access_token = decrypt(sucursal.mp_access_token);
-                        console.log(`[DynamicQR] Usando credenciales de sucursal ${sucursal.nombre}`);
-                    }
-                } catch (e) {
-                    console.warn("Error obteniendo credenciales para DynamicQR, usando fallback", e);
-                }
+            if (!sucursal_id) {
+                throw new Error("Sucursal Id es requerido para DynamicQR");
             }
+
+            // --- Credenciales Dinámicas ---
+            const { accessToken } = await this.getMpClient(sucursal_id);
 
             // 1. Obtener User ID
             const meRes = await fetch('https://api.mercadopago.com/users/me', {
-                headers: { 'Authorization': `Bearer ${access_token}` }
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             if (!meRes.ok) throw new Error("Could not fetch MP User ID");
             const meData: any = await meRes.json();
             const userId = meData.id;
 
             // 2. Obtener POS
-            const external_pos_id = await this._getOrCreatePOS(access_token, userId);
+            const external_pos_id = await this._getOrCreatePOS(accessToken, userId);
 
             const safeTotalStr = Number(total).toFixed(2);
             const pago_id_db = await this._createPaymentInDB(venta_id, 'MP_QR', Number(total));
@@ -710,7 +701,7 @@ export class PaymentService {
             const response = await fetch('https://api.mercadopago.com/v1/orders', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${access_token}`,
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json',
                     'X-Idempotency-Key': idempotencyKey
                 },
@@ -753,14 +744,4 @@ export class PaymentService {
             throw error;
         }
     }
-
-    // private async getSucursalCredentials(sucursal_id: string) {
-    //     // Tu lógica de DB aquí...
-    //     return {
-    //         access_token: "TEST-TU-ACCESS-TOKEN-REAL", 
-    //         external_pos_id: "SUCURSAL1_POS_TABLET"
-    //     };
-    // }
 }
-
-

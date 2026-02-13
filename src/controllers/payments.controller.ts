@@ -26,7 +26,9 @@ export class PaymentsController {
     }
 
     public async createMercadoPagoPreference(req: Request, res: Response) {
-        const { venta_id, monto, title, sucursal_id } = req.body;
+        const { venta_id, monto, title } = req.body;
+        // Prioritize authenticated user's branch, fallback to body (if useful for dev/testing)
+        const sucursal_id = req.user?.sucursal_id || req.body.sucursal_id;
 
         if (!sucursal_id) {
             return res.status(400).json({ success: false, error: 'sucursal_id is required' });
@@ -42,7 +44,12 @@ export class PaymentsController {
     }
 
     public async createInStoreQr(req: Request, res: Response) {
-        const { venta_id, monto, title, sucursal_id } = req.body;
+        const { venta_id, monto, title } = req.body;
+        const sucursal_id = req.user?.sucursal_id || req.body.sucursal_id;
+
+        if (!sucursal_id) {
+            return res.status(400).json({ success: false, error: 'sucursal_id is required' });
+        }
 
         try {
             const result = await PaymentService.getInstance().createInStoreOrder(venta_id, monto, title, sucursal_id);
@@ -167,7 +174,13 @@ export class PaymentsController {
     }
 
     public async createDynamicQR(req: Request, res: Response) {
-        const { total, sucursal_id, venta_id } = req.body;
+        const { total, venta_id } = req.body;
+        const sucursal_id = req.user?.sucursal_id || req.body.sucursal_id;
+
+        if (!sucursal_id) {
+            return res.status(400).json({ success: false, error: 'sucursal_id is required' });
+        }
+
         try {
             const result = await PaymentService.getInstance().createDynamicQR(total, sucursal_id, venta_id);
             res.json({ success: true, result });
