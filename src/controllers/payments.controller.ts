@@ -62,11 +62,18 @@ export class PaymentsController {
 
     public async createPointPayment(req: Request, res: Response) {
         const { venta_id, monto, device_id } = req.body;
+        const sucursal_id = req.user?.sucursal_id || req.body.sucursal_id;
+
+        if (!sucursal_id) {
+            return res.status(400).json({ success: false, error: 'sucursal_id is required for Point Payment' });
+        }
+
         // Prioritize body device_id, fallback to envs
         const targetDeviceId = device_id || process.env.MP_POINT_DEVICE_ID;
 
         try {
-            const result = await PaymentService.getInstance().createPointPayment(venta_id, monto, targetDeviceId);
+            // Pass sucursal_id to service
+            const result = await PaymentService.getInstance().createPointPayment(venta_id, monto, targetDeviceId, sucursal_id);
             res.json(result);
         } catch (error) {
             console.log(error);
@@ -165,7 +172,13 @@ export class PaymentsController {
 
     public async getPointDevices(req: Request, res: Response) {
         try {
-            const result = await PaymentService.getInstance().getPointDevices();
+            const sucursal_id = req.user?.sucursal_id || req.body.sucursal_id;
+
+            if (!sucursal_id) {
+                return res.status(400).json({ success: false, error: 'sucursal_id is required' });
+            }
+
+            const result = await PaymentService.getInstance().getPointDevices(sucursal_id);
             res.json({ success: true, result });
         } catch (error: any) {
             console.log(error);

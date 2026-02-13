@@ -216,7 +216,7 @@ export class PaymentService {
                     location: {
                         street_number: "123",
                         street_name: "Colon",
-                        city_name: "Lujan",
+                        city_name: "Luján",
                         state_name: "Buenos Aires",
                         latitude: -34.6037,
                         longitude: -58.3816,
@@ -270,13 +270,18 @@ export class PaymentService {
         return targetExternalId;
     }
 
-    public async getPointDevices() {
+    // Modificar la firma para recibir sucursal_id
+    public async getPointDevices(sucursal_id: string) {
         try {
-            console.log("📡 Consultando dispositivos Point a MP...");
+            console.log(`📡 Consultando dispositivos Point para sucursal: ${sucursal_id}...`);
+
+            // 1. OBTENER TOKEN DINÁMICO
+            const { accessToken } = await this.getMpClient(sucursal_id);
+
             const response = await fetch('https://api.mercadopago.com/terminals/v1/list', {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json'
                 }
             });
@@ -287,14 +292,12 @@ export class PaymentService {
             }
 
             const data = await response.json();
-            console.log("📱 Dispositivos encontrados en crudo:", JSON.stringify(data));
+            console.log("📱 Dispositivos encontrados:", JSON.stringify(data));
             const devices = data.data?.terminals || [];
             console.log(`✅ ${devices.length} dispositivos encontrados.`);
             return devices;
         } catch (error) {
             console.error("Error en getPointDevices:", error);
-            // Devolvemos array vacío en caso de error para no romper el front, pero loggeamos.
-            // Opcional: lanzar error si prefieres manejarlo en el controlador.
             throw error;
         }
     }
@@ -397,13 +400,18 @@ export class PaymentService {
         return { qr_data, pago_id };
     }
 
-    public async createPointPayment(venta_id: string, monto: number, device_id: string) {
+    public async createPointPayment(venta_id: string, monto: number, device_id: string, sucursal_id: string) {
         if (!device_id) throw new Error("Device ID is required for Point Payment");
+        if (!sucursal_id) throw new Error("sucursal_id is required for Point Payment");
+
         // 1. Create local payment reference
         // Note: Point logic is complex to multi-tenant if devices are not mapped to tokens.
         // Assuming global token or specific logic for now, or we need to pass sucursal_id.
         // For now, keeping global logic or todo for point.
         const pago_id = await this._createPaymentInDB(venta_id, 'MP_POINT', monto);
+
+        // --- Credenciales Dinámicas ---
+        const { accessToken } = await this.getMpClient(sucursal_id);
 
         // 2. Create Payment Intent
         const url = `https://api.mercadopago.com/point/integration-api/devices/${device_id}/payment-intents`;
@@ -418,7 +426,7 @@ export class PaymentService {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${envs.MP_ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
