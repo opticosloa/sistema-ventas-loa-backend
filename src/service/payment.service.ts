@@ -86,6 +86,16 @@ export class PaymentService {
         // Desencriptar Token
         const accessToken = decrypt(sucursal.mp_access_token);
 
+        const meReq = await fetch('https://api.mercadopago.com/users/me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        const meData = await meReq.json();
+        console.log("🕵️ CUENTA REAL DEL TOKEN:", {
+            id: meData.id,
+            email: meData.email, // <--- Esto te dirá exactamente qué email es el dueño
+            site_id: meData.site_id
+        });
+
         const client = new MercadoPagoConfig({
             accessToken: accessToken
         });
