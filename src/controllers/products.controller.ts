@@ -340,19 +340,25 @@ export class ProductsController {
 
             const processedItems = items.map((item: any) => {
                 const sugeridoArs = Number(item.precio_venta || 0);
+                const precioCostoArs = Number(item.precio_costo || 0);
 
-                // Calcular USD usando el sugerido
+                // Calcular USD usando el costo en ARS (Prioridad)
                 let calculatedUsd = 0;
                 if (sugeridoArs > 0) {
                     calculatedUsd = Number((sugeridoArs / dolarRate).toFixed(2));
                 }
+                let calculatedCostUsd = 0;
+                if (precioCostoArs > 0) {
+                    calculatedCostUsd = Number((precioCostoArs / dolarRate).toFixed(2));
+                }
 
                 return {
                     ...item,
-                    // Enviamos el precio_usd explícito para que el SP lo use
-                    precio_usd: calculatedUsd,
-                    // Eliminamos precio_venta para no ensuciar la DB
-                    precio_venta: null
+                    precio_costo: calculatedCostUsd, // Guardamos USD
+                    precio_usd: calculatedUsd,   // Guardamos USD explícito
+                    // Eliminamos precio_venta para no ensuciar, aunque el SP usa sugerido si usd es null.
+                    // Al enviar precio_usd explícito, el SP usará ese.
+                    precio_venta: null // Enviamos Sugerido por si el SP quiere actualizar precio_venta igual (aunque el SP lo pone null en update)
                 };
             });
 
