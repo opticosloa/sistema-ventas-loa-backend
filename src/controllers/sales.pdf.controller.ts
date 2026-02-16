@@ -81,7 +81,14 @@ export class SalesPdfController {
                 obraSocial = { nombre: receta.obra_social };
             }
 
-            // 5. Generar QR
+            // 5. Taller Info
+            let taller: any = null;
+            if (venta.taller_id) {
+                const tallerRes = await db.executeQuery('SELECT * FROM talleres WHERE taller_id = $1', [venta.taller_id]);
+                taller = tallerRes.rows[0];
+            }
+
+            // 6. Generar QR
             const qrCodeDataUrl = await QRCode.toDataURL(venta.venta_id || id);
 
             // Configurar PDF
@@ -97,7 +104,7 @@ export class SalesPdfController {
             doc.pipe(res);
 
             // Helpers de datos
-            const data = { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl, cliente, ticket };
+            const data = { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl, cliente, ticket, taller };
 
             // Dibujar Original (Parte Superior)
             // Reduced start Y from 40 to 30
@@ -122,7 +129,7 @@ export class SalesPdfController {
     }
 
     private async drawTalon(doc: PDFKit.PDFDocument, startY: number, label: string, data: any) {
-        const { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl, cliente, ticket } = data;
+        const { venta, items, receta, total, abonado, saldo, obraSocial, qrCodeDataUrl, cliente, ticket, taller } = data;
         const val = (v: any) => v ?? '';
         const money = (v: number) => `$ ${v.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
 
@@ -178,6 +185,13 @@ export class SalesPdfController {
         // --- SUBHEADER: Receta N y Totales ---
         const recetaNum = venta.venta_id?.split('-')[0].toUpperCase() || '---';
         doc.fontSize(10).font('Helvetica-Bold').text(`Receta Nº: ${recetaNum}`, 40, y);
+
+        // Taller Envío info
+        if (taller) {
+            doc.fontSize(9).font('Helvetica-Bold').fillColor('red')
+                .text(`Enviar a: ${taller.nombre} (Demora: ${taller.tiempo_demora || '-'})`, 160, y);
+            doc.fillColor('black'); // Reset
+        }
 
         // Tabla de Totales (simulada a la derecha)
         const totalsX = 400;

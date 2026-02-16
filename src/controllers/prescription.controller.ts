@@ -67,7 +67,8 @@ export class PrescriptionController {
       image_url,
       obraSocial,
       descuento,
-      items
+      items,
+      taller_id
     } = req.body;
 
     try {
@@ -205,15 +206,16 @@ export class PrescriptionController {
           finalObraSocialId = osResult.rows[0]?.obra_social_id || null;
         }
 
-        // B. [ACTUALIZADO] Llamada a sp_venta_crear con 7 parámetros
+        // B. [ACTUALIZADO] Llamada a sp_venta_crear con 8 parámetros
         const ventaResult: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_crear', [
           vendedor_id,
           finalClienteId,
           sucursal_id,
-          false,            // urgente
-          descuento || 0,   // descuento
-          JSON.stringify(items || []), // 6. items (el SP ahora los procesa internamente)
-          finalObraSocialId // 7. obra_social_id (UUID)
+          false,
+          descuento || 0,
+          JSON.stringify(items || []), // items
+          finalObraSocialId,
+          taller_id || null
         ]);
         console.log(ventaResult);
         // C. [LIMPIEZA] Ya no necesitas el bucle 'for' de sp_venta_item_agregar 

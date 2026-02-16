@@ -30,6 +30,10 @@ export class SalesController {
             return res.status(400).json({ success: false, error: 'cliente_id requerido' });
         }
 
+        // Validate and default optional parameters
+        const p_obra_social_id = req.body.obra_social_id || null;
+        const p_taller_id = req.body.taller_id || null;
+
         try {
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_crear', [
                 vendedor_id,
@@ -37,7 +41,9 @@ export class SalesController {
                 sucursal_id,
                 urgente,
                 descuento,
-                JSON.stringify(items)
+                JSON.stringify(items),
+                p_obra_social_id,
+                p_taller_id
             ]);
 
 
