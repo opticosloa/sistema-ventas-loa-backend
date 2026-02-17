@@ -3,7 +3,8 @@ export enum PaymentMethod {
     EFECTIVO = 'EFECTIVO',
     DEBITO = 'DEBITO',
     CREDITO = 'CREDITO',
-    TRANSFERENCIA = 'TRANSFERENCIA'
+    TRANSFERENCIA = 'TRANSFERENCIA',
+    POSNET_BANCARIO = 'POSNET_BANCARIO'
 }
 
 export enum PaymentStatus {
