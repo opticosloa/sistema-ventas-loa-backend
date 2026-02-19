@@ -197,8 +197,12 @@ export class SalesController {
     public async cancelSale(req: Request, res: Response) {
         const { id } = req.params;
         try {
-            await PostgresDB.getInstance().callStoredProcedure('sp_venta_cancelar', [id]);
-            res.json({ success: true, message: "Venta cancelada" });
+            const result: any = await PostgresDB.getInstance().callStoredProcedure('sp_venta_cancelar', [id]);
+
+            // La función retorna un JSON directamente en la primera columna
+            const response = result.rows[0].sp_venta_cancelar;
+
+            res.json(response);
         } catch (error) {
             console.log(error);
             res.status(500).json({ success: false, error });
