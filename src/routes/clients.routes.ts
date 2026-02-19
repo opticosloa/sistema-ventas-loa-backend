@@ -11,5 +11,6 @@ router.get('/by-dni/:dni', controller.getClientByDNI.bind(controller));
 router.put('/:id', controller.updateClient.bind(controller));
 router.delete('/:id', controller.deleteClient.bind(controller));
 router.get('/:id/account-status', controller.getAccountStatus.bind(controller));
+router.post('/:id/balance-adjustment', controller.adjustBalance.bind(controller));
 
 export default router;

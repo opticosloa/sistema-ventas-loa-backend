@@ -133,4 +133,35 @@ export class ClientsController {
             res.status(500).json({ success: false, error });
         }
     }
+
+    public async adjustBalance(req: Request, res: Response) {
+        const { id } = req.params;
+        const usuario_solicitante_id = req.user?.id;
+        const { nuevo_saldo, motivo, pin_autorizador } = req.body;
+
+        if (!usuario_solicitante_id) {
+            return res.status(401).json({ success: false, message: "Usuario no autenticado." });
+        }
+
+        try {
+            const result = await PostgresDB.getInstance().callStoredProcedure('sp_cliente_editar_cuenta_corriente', [
+                id,
+                usuario_solicitante_id,
+                pin_autorizador,
+                nuevo_saldo,
+                motivo
+            ]);
+
+            if (result.rows && result.rows.length > 0) {
+                const response = result.rows[0].sp_cliente_editar_cuenta_corriente || result.rows[0];
+                res.json(response);
+            } else {
+                res.json({ success: false, message: "Error desconocido al ajustar saldo." });
+            }
+
+        } catch (error) {
+            console.error("Error adjusting balance:", error);
+            res.status(500).json({ success: false, error });
+        }
+    }
 }
