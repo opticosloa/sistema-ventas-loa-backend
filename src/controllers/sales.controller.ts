@@ -110,10 +110,10 @@ export class SalesController {
         const { id } = req.params;
         try {
             const result = await PostgresDB.getInstance().callStoredProcedure('sp_venta_get_by_id', [id]);
-            if (!result || result.rows.length === 0) {
+            if (!result || !result.rows || result.rows.length === 0) {
                 return res.status(404).json({ success: false });
             }
-            res.json({ success: true, result });
+            res.json({ success: true, result: result.rows[0] });
         } catch (error) {
             console.log(error);
             res.status(500).json({ success: false, error });
