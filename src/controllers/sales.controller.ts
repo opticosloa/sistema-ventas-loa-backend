@@ -47,8 +47,9 @@ export class SalesController {
             ]);
 
 
-            const ventaData = result.rows?.[0]?.sp_venta_crear || result.rows?.[0] || {};
-            const venta_id = ventaData?.venta_id;
+            const ventaData = result.rows?.[0] || {};
+            const venta_id = ventaData?.venta_id || ventaData?.sp_venta_crear;
+            const warning_message = ventaData?.warning_message;
 
             if (!venta_id) {
                 throw new Error("No se pudo obtener el ID de la venta creada");
@@ -65,7 +66,8 @@ export class SalesController {
             res.json({
                 success: true,
                 venta_id,
-                total_confirmado
+                total_confirmado,
+                warning_message
             });
         } catch (error: any) {
             console.error("❌ SALES ERROR:", error.message);
